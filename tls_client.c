@@ -19,13 +19,14 @@
 #include "crypto/sha.h"
 #include "crypto/rsa.h"
 #include "crypto/AEAD.h"
+#include "crypto/ult.h"
 
 typedef struct {
     char* cipherSuite[3];
     char* key_share;
     char* sign_algorithm;
     /*Key Exchange*/
-    EC_KEY* private_key;
+    const EC_KEY* private_key;
     const EC_POINT* shared_key;
     unsigned char* master_key;
     unsigned char* hashed_master_key;
@@ -36,6 +37,10 @@ typedef struct {
     int (*func_dec_ptr)(char*, unsigned char*, int, unsigned char*, int, unsigned char*, unsigned char*, unsigned char*, int, unsigned char*);
     int (*func_hash_ptr)(char*, char*, unsigned char*);
     int (*func_verf_cert)(const EVP_MD*, char*, char*, unsigned char*, size_t);
+
+    /* Utility*/
+    EC_GROUP *ec_group;
+    BN_CTX *bn_ctx;
 }client;
 
 /* Ciphersuite Selection */
@@ -90,6 +95,9 @@ C.func_dec_ptr = &decrypt;
 C.func_hash_ptr = &computeHash;
 C.func_verf_cert = &verifySignature;
 
+C.ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
+C.bn_ctx = BN_CTX_new();
+
 int opt;
 if(argc == 1)
     handleErrors("Require selecting cipherName and hashName");
@@ -129,8 +137,8 @@ printf("\t- RSASSA-PCKS1-v1_5\n");
 C.sign_algorithm = "RSASSA-PCKS1-v1_5";
 
 //Choose hash function based on input
-//const EVP_MD *hashFunc;
-//hashFunc = EVP_get_digestbyname(hashName);
+const EVP_MD *hashFunc;
+hashFunc = EVP_get_digestbyname(hashName);
 
 
 //---------------------------------------------//
@@ -185,23 +193,33 @@ printf("\t2. Key share: %s\n", C.key_share);
 printf("\t3. Signature algorithm: %s\n", C.sign_algorithm);
 
 /* Creating Hello Message */
-EC_GROUP *ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
-BN_CTX *bn_ctx = BN_CTX_new();
-char* hex_key = EC_POINT_point2hex(ec_group, C.shared_key, POINT_CONVERSION_UNCOMPRESSED, bn_ctx);
+
+char* hex_key = EC_POINT_point2hex(C.ec_group, C.shared_key, POINT_CONVERSION_UNCOMPRESSED, C.bn_ctx);
 //printf("hex_key length: %d\n", (int)strlen(hex_key));
 create_hello_message(message, cipherName, hashName, C.key_share, C.sign_algorithm, hex_key);
 printf("Client Hello message: %s\n", message);
 printf("Hello message length: %d\n", (int)strlen(message));
-
-
+//print_key(C.ec_group, C.shared_key);
 
 
 //Send hello message
-    if( send(sock , message , strlen(message) , 0) < 0)
-    {
-        printf("Send failed\n");
-        return 1;
-    }
+if( send(sock , message , strlen(message) , 0) < 0)
+{
+    printf("Send failed\n");
+    return 1;
+}
+
+
+//Receive a reply from the server
+if( recv(sock , server_reply , BUFF_SIZE , 0) < 0)
+{
+    printf("recv failed\n");
+    return 1;
+}
+printf("Server reply: %s\n", server_reply);
+printf("Message length: %d\n", (int)strlen(server_reply));
+//memset(server_reply, 0, BUFF_SIZE);
+
 close(sock);
 
 
