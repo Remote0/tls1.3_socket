@@ -39,7 +39,7 @@ EC_KEY *create_key(void) {
     return secret;
 } */
 
-size_t compute_key(EC_KEY* key, const EC_POINT *peer_pub_key, unsigned char** secret) {
+size_t compute_key(const EC_KEY* key, const EC_POINT *peer_pub_key, unsigned char** secret) {
     int field_size;
     //unsigned char* secret;
     size_t secret_len;
