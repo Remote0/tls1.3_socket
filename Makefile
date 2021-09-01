@@ -1,4 +1,5 @@
-OPENSSL_DIR = /home/tuankiet/Documents/openssl-1.1.1g
+#OPENSSL_DIR = /home/tuankiet/Documents/openssl-1.1.1g
+OPENSSL_DIR = ./lib/include
 
 LIB = -lcrypto -lssl -ldl -lpthread
 INCLUDE = -I/$(OPENSSL_DIR)/include
