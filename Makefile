@@ -4,7 +4,7 @@ OPENSSL_DIR = ./lib/include
 LIB = -lcrypto -lssl -ldl -lpthread
 INCLUDE = -I/$(OPENSSL_DIR)/include
 LFLAGS = -L/$(OPENSSL_DIR)
-DEPS = rsa.h AEAD.h ECDH.h sha.h
+DEPS = rsa.h AEAD.h ECDH.h sha.h ult.h
 
 
 CC = gcc
