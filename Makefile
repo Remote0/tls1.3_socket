@@ -1,10 +1,11 @@
 #OPENSSL_DIR = /home/tuankiet/Documents/openssl-1.1.1g
 OPENSSL_DIR = ./lib/include
 
-LIB = -lcrypto -lssl -ldl -lpthread
-INCLUDE = -I/$(OPENSSL_DIR)/include
+
+LIB = -lcrypto -lssl -ldl -lpthread -lm
+INCLUDE = -I/$(OPENSSL_DIR)
 LFLAGS = -L/$(OPENSSL_DIR)
-DEPS = rsa.h AEAD.h ECDH.h sha.h ult.h
+DEPS = ./crypto/*.h
 
 
 CC = gcc
