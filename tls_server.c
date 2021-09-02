@@ -154,7 +154,9 @@ void create_hello_message(char* hello_message, server* ser){
     strcat(hello_message, "<IV>");
     strcat(hello_message, (char*) ser->iv);
     strcat(hello_message, "<TAG>");
-    strcat(hello_message, (char*) tag);
+    char* base64_tag;
+    Base64Encode(tag, 16, &base64_tag);
+    strcat(hello_message, (char*) base64_tag);
     strcat(hello_message, "<SIGNATURE>");
     strcat(hello_message, base64_enc_signature);
 }
@@ -235,8 +237,8 @@ printf("*----------------------------------*\n");
 while( (read_size = recv(client_sock , client_message , BUFF_SIZE, 0)) > 0)
 {
     /* Hello message */
-    // printf("Received from Client: %s\n", client_message);
-    // printf("Message length: %d\n", (int)strlen(client_message));
+    printf("Received from Client: %s\n", client_message);
+    printf("Message length: %d\n", (int)strlen(client_message));
     parsing_hello_message(client_message, &S);
 
     printf("Accept Client connection with:\n");
@@ -261,19 +263,14 @@ while( (read_size = recv(client_sock , client_message , BUFF_SIZE, 0)) > 0)
     //1. Reconstruct Client's shared key
     S.C_shared_key = EC_POINT_hex2point(S.ec_group, S.C_hex_key, NULL, S.bn_ctx);
     //print_key(S.ec_group, S.C_shared_key);
-    
-
     size_t S_master_len;
     S_master_len = compute_key(S.private_key, S.C_shared_key, &S.master_key);
     if (S.master_key == NULL)
             handleErrors("Error creating Master Key");
-
-    printf("\t***GENERATED***\n");
-
     if(hash_key(hashFunc, S.master_key, S_master_len, &S.hashed_master_key, &S.hashed_key_len) < 0) {
         handleErrors("error generate hashed key\n");
     }
-    
+    printf("\t***GENERATED***\n");
     printf("S key HKDF len: %ldB - %ldbit\n", S.hashed_key_len, S.hashed_key_len*8);
     BIO_dump_fp(stdout, (const char*) S.hashed_master_key, S.hashed_key_len);
 
@@ -285,6 +282,7 @@ while( (read_size = recv(client_sock , client_message , BUFF_SIZE, 0)) > 0)
     S.signature_len = S.func_sign_cert(hashFunc, S.RSA_private_key, S.cert, &S.signature);
     printf("\t***SIGNED***\n");
 
+    /*Create server hello message*/
     S.hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
     create_hello_message(message, &S);
 
