@@ -66,5 +66,10 @@ void Base64Decode(const char* b64message, unsigned char** buffer, size_t* length
   BIO_free_all(bio);
 }
 
+int find_pos(const char* haystack, const char* needle) {
+  char* ptr = strstr(haystack, needle);
+  return ptr-haystack;
+}
+
 
 #endif //ULT_H
