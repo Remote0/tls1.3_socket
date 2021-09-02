@@ -148,9 +148,6 @@ void create_hello_message(char* hello_message, server* ser){
     // Base64Decode(base64_enc_signature, &base64_dec_signature, &dec_enc_signature_len);
     // printf("decode encrypted len: %ld\n", dec_enc_signature_len);
     // BIO_dump_fp(stdout,(const char*) base64_dec_signature, dec_enc_signature_len);
-
-    strcat(hello_message, "<LENGTH>");
-    strcat(hello_message, base64_signature_len);
     strcat(hello_message, "<IV>");
     strcat(hello_message, (char*) ser->iv);
     strcat(hello_message, "<TAG>");
