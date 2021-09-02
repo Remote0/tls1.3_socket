@@ -4,6 +4,7 @@
 #pragma once
 #include <openssl/evp.h>
 #include <openssl/hmac.h>
+#include <openssl/kdf.h>
 
 unsigned char* hmac_sha256(const void* key,
                            int keylen,
@@ -14,6 +15,25 @@ unsigned char* hmac_sha256(const void* key,
                            ) {
     return HMAC(EVP_sha256(), key, keylen, data, datalen, result, resultlen);
 }
+
+int hash_key(const EVP_MD* hashFunc, const unsigned char* key, const size_t keylen, unsigned char** hased_key, size_t* out_keylen) {
+        EVP_PKEY_CTX* ctx;
+        *hased_key = (unsigned char*)malloc(sizeof(unsigned char) * *out_keylen); 
+        ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
+        if(EVP_PKEY_derive_init(ctx) <= 0)
+                return -1;
+        if(EVP_PKEY_CTX_set_hkdf_md(ctx, hashFunc) <= 0)
+                return -1;
+        if(EVP_PKEY_CTX_set1_hkdf_salt(ctx, "salt", 4) <= 0)
+                return -1;
+        if(EVP_PKEY_CTX_set1_hkdf_key(ctx, key, keylen) <= 0)
+                return -1;
+        if(EVP_PKEY_derive(ctx, *hased_key, out_keylen) <= 0)
+                return -1;
+        EVP_PKEY_CTX_free(ctx);
+        return 0;
+}
+
 
 
 //Example use in main
