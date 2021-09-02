@@ -25,9 +25,14 @@ typedef struct {
     char* cipherSuite[3];
     char* key_share;
     char* sign_algorithm;
+
+    char* cipherName;
+    int cipher_key_len;
+    char* hashName;
     /*Key Exchange*/
     const EC_KEY* private_key;
     const EC_POINT* shared_key;
+    char* hex_key;
     unsigned char* master_key;
     unsigned char* hashed_master_key;
     /*Cert Verification*/
@@ -44,9 +49,7 @@ typedef struct {
 }client;
 
 /* Ciphersuite Selection */
-char* cipherName = NULL;
-int cipher_key_len = 0;
-char* hashName = NULL;
+
 
 /* For transmission */ 
 char message[1000];
@@ -54,34 +57,34 @@ char server_reply[BUFF_SIZE];
 
 
 
-void create_hello_message(char* hello_message, char* cipher, char* hash, char* key_gen, char* sign_algorithm, char* hex_key) {
+void create_hello_message(char* hello_message, client* clnt) {
     strcat(hello_message, "<<CIPHERSUITE>>");
-    if((strcmp(cipher,"aes-128-gcm") == 0) & (strcmp(hash,"sha256") == 0))
+    if((strcmp(clnt->cipherName,"aes-128-gcm") == 0) & (strcmp(clnt->hashName,"sha256") == 0))
         strcat(hello_message, "01");
-    else if((strcmp(cipher,"aes-256-gcm") == 0) & (strcmp(hash,"sha384") == 0))
+    else if((strcmp(clnt->cipherName,"aes-256-gcm") == 0) & (strcmp(clnt->hashName,"sha384") == 0))
         strcat(hello_message, "02");
-    else if((strcmp(cipher,"chacha20-poly1305") == 0) & (strcmp(hash,"sha256") == 0))
+    else if((strcmp(clnt->cipherName,"chacha20-poly1305") == 0) & (strcmp(clnt->hashName,"sha256") == 0))
         strcat(hello_message, "03");
     
     //using ECDHE
     strcat(hello_message, "<<KEYSHARE>>");
-    strcat(hello_message, key_gen);
+    strcat(hello_message, clnt->key_share);
 
     //using RSASSA-PKCS1-v1_5
     strcat(hello_message, "<<SIGN>>");
-    if(strcmp(hash,"sha256") == 0)
+    if(strcmp(clnt->hashName,"sha256") == 0)
         strcat(hello_message, "0401");
-    else if(strcmp(hash,"sha384") == 0)
+    else if(strcmp(clnt->hashName,"sha384") == 0)
         strcat(hello_message, "0501");
-    else if(strcmp(hash,"sha512") == 0)
+    else if(strcmp(clnt->hashName,"sha512") == 0)
         strcat(hello_message, "0601");
 
     strcat(hello_message, "<<KEY>>");
-    strcat(hello_message, hex_key);
-    printf("keyshare length: %d\n", (int)strlen(hex_key));
+    strcat(hello_message, clnt->hex_key);
+    printf("keyshare length: %d\n", (int)strlen(clnt->hex_key));
     return;
 }
-
+void parsing_hello_message();
 
 int main(int argc , char *argv[]) {
 //---------------------------------------------//
@@ -104,19 +107,19 @@ if(argc == 1)
 while((opt = getopt(argc, argv, "c:h:")) != -1) {
     switch(opt) {
         case 'c':
-            cipherName = optarg;
-            if(!strcmp(cipherName, "aes-128-gcm"))
-                    cipher_key_len = 16;
-            else if((!strcmp(cipherName, "aes-256-gcm")) | (!strcmp(cipherName, "chacha20-poly1305")))
-                    cipher_key_len = 32;
+            C.cipherName = optarg;
+            if(!strcmp(C.cipherName, "aes-128-gcm"))
+                    C.cipher_key_len = 16;
+            else if((!strcmp(C.cipherName, "aes-256-gcm")) | (!strcmp(C.cipherName, "chacha20-poly1305")))
+                    C.cipher_key_len = 32;
             break;
         case 'h':
-            hashName = optarg;
+            C.hashName = optarg;
             break;
     }
 }
 
-if((cipherName == NULL) | (hashName == NULL))
+if((C.cipherName == NULL) | (C.hashName == NULL))
     handleErrors("Error selecting Cipher");
 
 /* 1. List of cipher suites */
@@ -138,7 +141,7 @@ C.sign_algorithm = "RSASSA-PCKS1-v1_5";
 
 //Choose hash function based on input
 const EVP_MD *hashFunc;
-hashFunc = EVP_get_digestbyname(hashName);
+hashFunc = EVP_get_digestbyname(C.hashName);
 
 
 //---------------------------------------------//
@@ -188,37 +191,43 @@ C.shared_key = EC_KEY_get0_public_key(C.private_key);
 printf("\t***DONE***\n");
 
 printf("Creating Client Hello message with prefer selection:\n");
-printf("\t1. Ciphersuite: %s_%s\n", cipherName, hashName);
+printf("\t1. Ciphersuite: %s_%s\n", C.cipherName, C.hashName);
 printf("\t2. Key share: %s\n", C.key_share);
 printf("\t3. Signature algorithm: %s\n", C.sign_algorithm);
 
 /* Creating Hello Message */
 
-char* hex_key = EC_POINT_point2hex(C.ec_group, C.shared_key, POINT_CONVERSION_UNCOMPRESSED, C.bn_ctx);
+C.hex_key = EC_POINT_point2hex(C.ec_group, C.shared_key, POINT_CONVERSION_UNCOMPRESSED, C.bn_ctx);
 //printf("hex_key length: %d\n", (int)strlen(hex_key));
-create_hello_message(message, cipherName, hashName, C.key_share, C.sign_algorithm, hex_key);
-printf("Client Hello message: %s\n", message);
-printf("Hello message length: %d\n", (int)strlen(message));
+create_hello_message(message, &C);
+// printf("Client Hello message: %s\n", message);
+// printf("Hello message length: %d\n", (int)strlen(message));
 //print_key(C.ec_group, C.shared_key);
-
-
 //Send hello message
 if( send(sock , message , strlen(message) , 0) < 0)
 {
     printf("Send failed\n");
     return 1;
 }
-
-
+printf("Hello Message Sent...\n");
+printf("----------------------------------\n");
 //Receive a reply from the server
 if( recv(sock , server_reply , BUFF_SIZE , 0) < 0)
 {
     printf("recv failed\n");
     return 1;
 }
+
+/* Verify Server Authentication */
+printf("ACCEPTED communication to Server\n");
 printf("Server reply: %s\n", server_reply);
 printf("Message length: %d\n", (int)strlen(server_reply));
-//memset(server_reply, 0, BUFF_SIZE);
+
+
+
+
+
+// //memset(server_reply, 0, BUFF_SIZE);
 
 close(sock);
 
