@@ -20,6 +20,7 @@
 #include "crypto/rsa.h"
 #include "crypto/AEAD.h"
 #include "crypto/ult.h"
+#include "crypto/hmac.h"
 
 typedef struct{
     char* cipherSuite;
@@ -53,6 +54,10 @@ typedef struct{
     /* Utility */
     const EC_GROUP* ec_group;
     BN_CTX* bn_ctx;
+    unsigned char* iv;
+    size_t iv_len;
+    unsigned char* additional;
+
 }server;
 
 char client_message[BUFF_SIZE];
@@ -105,13 +110,53 @@ void parsing_hello_message(char* message, server* ser){
     
     strncpy(ser->C_hex_key, &message[53], strlen(message) - 53);
 }
-void create_hello_message(char* hello_message, char* key, char* cert, char* signature){
+void create_hello_message(char* hello_message, server* ser){
     strcat(hello_message, "<<KEY>>");
-    strcat(hello_message, key);
-    strcat(hello_message, "<<CERT>>");
-    strcat(hello_message, cert);
-    strcat(hello_message, "<<SIGNATURE>>");
-    strcat(hello_message, signature);
+    strcat(hello_message, ser->hex_key);
+    strcat(hello_message, "<<ENCRYPTED>>");
+
+    //Encrypt signature and certificate
+    char plain_signature[BUFF_SIZE];
+    strcat(plain_signature, "<<SIGNATURE>>");
+    //encode signature to base64
+    char* base64_signature;
+    Base64Encode(ser->signature, ser->signature_len, &base64_signature);
+    char base64_signature_len[10];
+    sprintf(base64_signature_len, "%d", (int)strlen(base64_signature));
+    strcat(plain_signature, base64_signature);
+    strcat(plain_signature, "<<CERT>>");
+    strcat(plain_signature, ser->cert);
+
+
+    //encode cert and signature too base64
+    unsigned char enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
+    int enc_signature_len;
+    unsigned char tag[16];
+    enc_signature_len = ser->func_enc_ptr(ser->cipherName,
+                                          (unsigned char*) plain_signature, strlen(plain_signature),
+                                          ser->additional, strlen((char*)ser->additional),
+                                          ser->hashed_master_key,
+                                          ser->iv, ser->iv_len,
+                                          enc_signature, tag); /* Encrypt the signature and certificate */
+    //printf("decode encrypted len: %d\n", enc_signature_len);                                      
+    //BIO_dump_fp(stdout,(const char*) enc_signature, enc_signature_len);
+    
+    char* base64_enc_signature;
+    Base64Encode(enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
+    // unsigned char* base64_dec_signature;
+    // size_t dec_enc_signature_len;
+    // Base64Decode(base64_enc_signature, &base64_dec_signature, &dec_enc_signature_len);
+    // printf("decode encrypted len: %ld\n", dec_enc_signature_len);
+    // BIO_dump_fp(stdout,(const char*) base64_dec_signature, dec_enc_signature_len);
+
+    strcat(hello_message, "<LENGTH>");
+    strcat(hello_message, base64_signature_len);
+    strcat(hello_message, "<IV>");
+    strcat(hello_message, (char*) ser->iv);
+    strcat(hello_message, "<TAG>");
+    strcat(hello_message, (char*) tag);
+    strcat(hello_message, "<SIGNATURE>");
+    strcat(hello_message, base64_enc_signature);
 }
 
 
@@ -130,7 +175,9 @@ S.func_sign_cert = &signMessage;
 
 S.ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
 S.bn_ctx = BN_CTX_new();
-
+S.iv = (unsigned char*)"0123456789ab"; /* 96 bits IV*/
+S.iv_len = 12;
+S.additional = (unsigned char*)"KIET-PC";
 //---------------------------------------------//
 //------------ESTABLISH CONNECTION-------------//
 //---------------------------------------------//
@@ -220,25 +267,13 @@ while( (read_size = recv(client_sock , client_message , BUFF_SIZE, 0)) > 0)
     S_master_len = compute_key(S.private_key, S.C_shared_key, &S.master_key);
     if (S.master_key == NULL)
             handleErrors("Error creating Master Key");
-    printf("\t***GENERATED***\n");
-    S.master_key[S_master_len] = '\0';
 
-    EVP_PKEY_CTX* ctx;
-    S.hashed_master_key = malloc(sizeof(unsigned char) * S.hashed_key_len); 
-    //size_t S_hashed_key_len = cipher_key_len; //this decides the length of key
-    ctx = EVP_PKEY_CTX_new_id(EVP_PKEY_HKDF, NULL);
-    if(EVP_PKEY_derive_init(ctx) <= 0)
-            return -1;
-    if(EVP_PKEY_CTX_set_hkdf_md(ctx, hashFunc) <= 0)
-            return -1;
-    if(EVP_PKEY_CTX_set1_hkdf_salt(ctx, "salt", 4) <= 0)
-            return -1;
-    if(EVP_PKEY_CTX_set1_hkdf_key(ctx, S.master_key, S_master_len) <= 0)
-            return -1;
-    if(EVP_PKEY_derive(ctx, S.hashed_master_key, &S.hashed_key_len) <= 0)
-            return -1;
-    EVP_PKEY_CTX_free(ctx);
-    S.hashed_master_key[S.hashed_key_len] = '\0';
+    printf("\t***GENERATED***\n");
+
+    if(hash_key(hashFunc, S.master_key, S_master_len, &S.hashed_master_key, &S.hashed_key_len) < 0) {
+        handleErrors("error generate hashed key\n");
+    }
+    
     printf("S key HKDF len: %ldB - %ldbit\n", S.hashed_key_len, S.hashed_key_len*8);
     BIO_dump_fp(stdout, (const char*) S.hashed_master_key, S.hashed_key_len);
 
@@ -250,10 +285,11 @@ while( (read_size = recv(client_sock , client_message , BUFF_SIZE, 0)) > 0)
     S.signature_len = S.func_sign_cert(hashFunc, S.RSA_private_key, S.cert, &S.signature);
     printf("\t***SIGNED***\n");
 
-    char* hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
-    create_hello_message(message, hex_key, S.cert, (char*)S.signature);
-    printf("Send to Client: %s\n", message);
-    printf("Message length: %d\n", (int)strlen(message));
+    S.hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
+    create_hello_message(message, &S);
+
+    // printf("Send to Client: %s\n", message);
+    // printf("Message length: %d\n", (int)strlen(message));
     write(client_sock , message , strlen(message));
     //memset(client_message, 0, BUFF_SIZE);
 }
