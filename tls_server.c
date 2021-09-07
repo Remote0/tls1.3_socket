@@ -2,7 +2,7 @@
 	C socket server example
 */
 
-#define BUFF_SIZE 2000
+#define BUFF_SIZE 1000
 
 #include<stdio.h>
 #include<stdlib.h>
@@ -113,20 +113,23 @@ void parsing_hello_message(char* message, server* ser){
 void create_hello_message(char* hello_message, server* ser){
     strcat(hello_message, "<<KEY>>");
     strcat(hello_message, ser->hex_key);
+    // printf("Sever hex key: %s\n", ser->hex_key);
+    // printf("Server hex key length: %ld\n", strlen(ser->hex_key));
     strcat(hello_message, "<<ENCRYPTED>>");
 
     //Encrypt signature and certificate
-    char plain_signature[BUFF_SIZE];
-    strcat(plain_signature, "<<SIGNATURE>>");
+    char plain_signature[BUFF_SIZE] = "<<SIGNATURE>>";
+    //strcat(plain_signature, "<<SIGNATURE>>");
     //encode signature to base64
     char* base64_signature;
     Base64Encode(ser->signature, ser->signature_len, &base64_signature);
-    char base64_signature_len[10];
-    sprintf(base64_signature_len, "%d", (int)strlen(base64_signature));
     strcat(plain_signature, base64_signature);
     strcat(plain_signature, "<<CERT>>");
     strcat(plain_signature, ser->cert);
-
+    
+    // printf("plain_signature: %s\n", plain_signature);
+    // printf("plain_signature len: %ld\n", strlen(plain_signature));
+    //printf("dec_signature len: %ld\n", dec_signature_len);
 
     //encode cert and signature too base64
     unsigned char enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
@@ -138,22 +141,28 @@ void create_hello_message(char* hello_message, server* ser){
                                           ser->hashed_master_key,
                                           ser->iv, ser->iv_len,
                                           enc_signature, tag); /* Encrypt the signature and certificate */
-    //printf("decode encrypted len: %d\n", enc_signature_len);                                      
-    //BIO_dump_fp(stdout,(const char*) enc_signature, enc_signature_len);
-    
+                                        
+    // BIO_dump_fp(stdout,(const char*) enc_signature, enc_signature_len);
+    // printf("enc_signature length: %ld\n", enc_signature_len);
     char* base64_enc_signature;
     Base64Encode(enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
+    // printf("enc_signanture: %s\n",base64_enc_signature);
+    // printf("enc_signature length: %ld\n", strlen(base64_enc_signature));
+
     // unsigned char* base64_dec_signature;
     // size_t dec_enc_signature_len;
     // Base64Decode(base64_enc_signature, &base64_dec_signature, &dec_enc_signature_len);
     // printf("decode encrypted len: %ld\n", dec_enc_signature_len);
     // BIO_dump_fp(stdout,(const char*) base64_dec_signature, dec_enc_signature_len);
+
     strcat(hello_message, "<IV>");
     strcat(hello_message, (char*) ser->iv);
     strcat(hello_message, "<TAG>");
     char* base64_tag;
     Base64Encode(tag, 16, &base64_tag);
     strcat(hello_message, (char*) base64_tag);
+    strcat(hello_message, "<ADDITIONAL>");
+    strcat(hello_message, (char*) ser->additional);
     strcat(hello_message, "<SIGNATURE>");
     strcat(hello_message, base64_enc_signature);
 }
