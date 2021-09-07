@@ -11,20 +11,18 @@
 #include <stdio.h>
 
 void print_key(const EC_GROUP* ec_group, const EC_POINT* key){
-    BIGNUM *x = BN_new();
-    BIGNUM *y = BN_new();
-    if(EC_POINT_get_affine_coordinates_GFp(ec_group, key, x, y, NULL)) {
-        printf("\n Print Key:\n");
-        BN_print_fp(stdout, x);
-        putc('\n', stdout);
-        BN_print_fp(stdout, y);
-        putc('\n', stdout);
-    }
+  BIGNUM *x = BN_new();
+  BIGNUM *y = BN_new();
+  if(EC_POINT_get_affine_coordinates_GFp(ec_group, key, x, y, NULL)) {
+    printf("\n Print Key:\n");
+    BN_print_fp(stdout, x);
+    putc('\n', stdout);
+    BN_print_fp(stdout, y);
+    putc('\n', stdout);
+  }
 }
 
-void Base64Encode( const unsigned char* buffer,
-                   size_t length,
-                   char** base64Text) {
+void Base64Encode(const unsigned char* buffer, size_t length, char** base64Text) {
   BIO *bio, *b64;
   BUF_MEM *bufferPtr;
 
@@ -71,5 +69,18 @@ int find_pos(const char* haystack, const char* needle) {
   return ptr-haystack;
 }
 
+void parse_message(const char* haystack, const char* needle1, const char* needle2, char* get_string) {
+  int getlength;
+  if(needle2 != NULL)
+    getlength = find_pos(haystack, needle2) - find_pos(haystack, needle1) - strlen(needle1);
+  else
+    getlength = strlen(haystack)- find_pos(haystack, needle1) - strlen(needle1);
+  int getpos = find_pos(haystack, needle1) + strlen(needle1);
+  
+  strncpy(get_string, &haystack[getpos], getlength);
+
+  get_string[getlength] = '\0';
+  return;
+}
 
 #endif //ULT_H
