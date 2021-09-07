@@ -279,6 +279,7 @@ ciphertext_len = S.func_enc_ptr(cipherName,
 printf("***ENCRYPTED***\n"); /* Do something useful with the ciphertext */
 printf("Ciphertext:\n");
 BIO_dump_fp(stdout, (const char *)ciphertext, ciphertext_len);
+printf("tag: %s\n", (char*)tag);
 printf("Tag:\n");
 BIO_dump_fp(stdout, (const char*)tag, 16);
 
