@@ -66,7 +66,11 @@ typedef struct {
 /* For transmission */ 
 char out_message[BUFF_SIZE];
 char in_message[BUFF_SIZE];
+unsigned char buff_dec[BUFF_SIZE];
+size_t buff_dec_length;
 
+
+/* Handshake */
 void create_hello_message(char* hello_message, client* clnt) {
     strcat(hello_message, "<<CIPHERSUITE>>");
     if((strcmp(clnt->cipherName,"aes-128-gcm") == 0) & (strcmp(clnt->hashName,"sha256") == 0))
@@ -136,6 +140,7 @@ void verify(const char* plain_signature, client* clnt) {
     }
 }
 
+/* Transaction */
 void create_out_message(char* out_message, client* clnt, unsigned char* encrypted, int encrypted_len, unsigned char* tag) {
     strcat(out_message, "<<TAG>>");
     char* bs64_tag;
@@ -145,6 +150,29 @@ void create_out_message(char* out_message, client* clnt, unsigned char* encrypte
     char* bs64_encrypted;
     Base64Encode(encrypted, encrypted_len, &bs64_encrypted);
     strcat(out_message, bs64_encrypted);
+}
+
+void process_in_message(char* in_message, client* C){
+    char bs64_tag[16];
+    char bs64_encrypted[100];
+    unsigned char* tag;
+    size_t tag_len;
+    unsigned char* encrypted;
+    size_t encrypted_len;
+
+    parse_message(in_message,"<<TAG>>", "<<ENCRYPTED>>", bs64_tag);
+    parse_message(in_message,"<<ENCRYPTED>>", NULL , bs64_encrypted);
+    Base64Decode(bs64_tag, &tag, &tag_len);
+    Base64Decode(bs64_encrypted, &encrypted, &encrypted_len);
+
+    buff_dec_length = C->func_dec_ptr( C->cipherName,
+                                    encrypted, encrypted_len,
+                                    C->additional, strlen((char*)C->additional),
+                                    C->hashed_master_key,
+                                    tag,
+                                    C->iv, 12,
+                                    buff_dec);
+    buff_dec[buff_dec_length] = '\0';
 }
 
 int main(int argc , char *argv[]) {
@@ -291,41 +319,65 @@ printf("\t***GENERATED***\n");
 // BIO_dump_fp(stdout, (const char*) C.hashed_master_key, C.hashed_key_len);
 
 /* Verify Server Authentication */
-unsigned char plain_signature[BUFF_SIZE];
-size_t plain_signature_length;
-plain_signature_length = C.func_dec_ptr( C.cipherName,
+buff_dec_length = C.func_dec_ptr( C.cipherName,
                                         C.enc_signature, C.enc_signature_len,
                                         C.additional, strlen((char*)C.additional),
                                         C.hashed_master_key,
                                         C.tag,
                                         C.iv, 12,
-                                        plain_signature);
-plain_signature[plain_signature_length] = '\0';
-verify((char*)plain_signature, &C);
+                                        buff_dec);
+buff_dec[buff_dec_length] = '\0';
+verify((char*)buff_dec, &C);
 
 
-
+printf("==============Ping to Server==============\n");
 /* Request time to Server */
-unsigned char buff[BUFF_SIZE] = "Request date and time\n";
-unsigned char buff2[BUFF_SIZE];
-unsigned char buff_tag[100];
-int buff2_len;
-buff2_len = C.func_enc_ptr(C.cipherName,
-                            buff, strlen((char*)buff),
-                            C.additional, strlen((char*)C.additional),
-                            C.hashed_master_key,
-                            C.iv, 12,
-                            buff2, buff_tag);
+struct timespec time_start, time_end, tfe, tfs;
+long double rtt_msec=0, total_msec=0;
+double timeElapsed;
+int loop_cnt = 6;
+i = 0;
 memset(out_message, 0, BUFF_SIZE);
-create_out_message(out_message, &C, buff2, buff2_len, buff_tag);
-// Send request message
-if( send(sock , out_message , strlen(out_message) , 0) < 0)
-{
-    printf("Send failed\n");
-    return 1;
-}
+strcat(out_message, "<<MESSAGE>>PingRequest");
+clock_gettime(CLOCK_MONOTONIC, &tfs);
+while(i < loop_cnt){
+    memset(in_message, 0, BUFF_SIZE);
+    memset(buff_dec, 0, BUFF_SIZE);
 
-printf("??????????????\n");
+    /* Mark time here*/
+    clock_gettime(CLOCK_MONOTONIC, &time_start);
+
+    // Send request message
+    if( send(sock , out_message , strlen(out_message) , 0) < 0)
+    {
+        printf("Send failed\n");
+        close(sock);
+        return 1;
+    }
+
+    // Receive a reply from the server
+    if( recv(sock , in_message , BUFF_SIZE , 0) < 0)
+    {
+        printf("recv failed\n");
+        return 1;
+    }
+
+    /* Mark time here*/
+    clock_gettime(CLOCK_MONOTONIC, &time_end);
+    timeElapsed = ((double)(time_end.tv_nsec - time_start.tv_nsec))/1000000.0;
+    rtt_msec = (time_end.tv_sec - time_start.tv_sec) * 1000.0 + timeElapsed;
+
+    process_in_message(in_message, &C);
+    printf("%ld bytes from local host (127.0.0.1)\trtt: % Lf ms.\n", strlen((char*)buff_dec), rtt_msec);
+    i = i + 1;
+}
+clock_gettime(CLOCK_MONOTONIC, &tfe);
+timeElapsed = ((double)(time_end.tv_nsec - time_start.tv_nsec))/1000000.0;
+total_msec = (time_end.tv_sec - time_start.tv_sec) * 1000.0 + timeElapsed;
+printf("==========27.0.0.1 ping statistics=========\n");
+printf("\n%d packets sent, %d packets received, %f percent packet loss.\nTotal time: %Lf ms.\n\n", loop_cnt, i, ((loop_cnt - i)/loop_cnt)*100.0, total_msec);
+
+
 //BIO_dump_fp(stdout, (const char*) dec_signature, dec_signature_len);
 
 //memset(server_hello, 0, BUFF_SIZE);
