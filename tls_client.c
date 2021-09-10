@@ -187,6 +187,13 @@ C.ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
 C.bn_ctx = BN_CTX_new();
 C.iv = (unsigned char*)malloc(sizeof(char)*12); //96bits
 
+C.cipherSuite[0] = "aes-128-gcm_sha256";
+C.cipherSuite[1] = "aes-256-gcm_sha384";
+C.cipherSuite[2] = "chacha20-poly1305_sha256";
+C.key_share = "ECDHE";
+C.sign_algorithm = "RSASSA-PCKS1-v1_5";
+
+int i;
 
 int opt;
 if(argc == 1)
@@ -210,22 +217,19 @@ while((opt = getopt(argc, argv, "c:h:")) != -1) {
 if((C.cipherName == NULL) | (C.hashName == NULL))
     handleErrors("Error selecting Cipher");
 
-/* 1. List of cipher suites */
-printf("1. List of available Ciphersuite:\n");
-C.cipherSuite[0] = "aes-128-gcm_sha256";
-C.cipherSuite[1] = "aes-256-gcm_sha384";
-C.cipherSuite[2] = "chacha20-poly1305_sha256";
-int i;
-for(i = 0; i < 3; i = i + 1)
-    printf("\t- %s\n", C.cipherSuite[i]);
-/* 2. Key share extension */
-printf("2. Key share extension:\n");
-printf("\t- ECDHE\n");
-C.key_share = "ECDHE";
-/* 3. Signature algorithms extension */
-printf("3. Signature algorithms extension:\n");
-printf("\t- RSASSA-PCKS1-v1_5\n");
-C.sign_algorithm = "RSASSA-PCKS1-v1_5";
+// /* 1. List of cipher suites */
+// printf("1. List of available Ciphersuite:\n");
+
+// for(i = 0; i < 3; i = i + 1)
+//     printf("\t- %s\n", C.cipherSuite[i]);
+// /* 2. Key share extension */
+// printf("2. Key share extension:\n");
+// printf("\t- ECDHE\n");
+
+// /* 3. Signature algorithms extension */
+// printf("3. Signature algorithms extension:\n");
+// printf("\t- RSASSA-PCKS1-v1_5\n");
+
 
 //---------------------------------------------//
 //------------SOCKET CONNECTION-------------//
@@ -334,10 +338,11 @@ i = 0;
 memset(out_message, 0, BUFF_SIZE);
 strcat(out_message, "<<MESSAGE>>PingRequest");
 clock_gettime(CLOCK_MONOTONIC, &tfs);
+
 while(i < loop_cnt){
+    int rc;
     memset(in_message, 0, BUFF_SIZE);
     memset(buff_dec, 0, BUFF_SIZE);
-
     /* Mark time here*/
     clock_gettime(CLOCK_MONOTONIC, &time_start);
 
@@ -348,22 +353,42 @@ while(i < loop_cnt){
         close(sock);
         return 1;
     }
-
+    // printf("send: %d\n", rc);
+    
     // Receive a reply from the server
-    if( recv(sock , in_message , BUFF_SIZE , 0) < 0)
+    rc = recv(sock , in_message , BUFF_SIZE , 0);
+    if( rc < 0)
     {
         printf("recv failed\n");
         return 1;
     }
-
+    // printf("received: %d\n", rc);
+    
     /* Mark time here*/
     clock_gettime(CLOCK_MONOTONIC, &time_end);
     timeElapsed = ((double)(time_end.tv_nsec - time_start.tv_nsec))/1000000.0;
     rtt_msec = (time_end.tv_sec - time_start.tv_sec) * 1000.0 + timeElapsed;
 
     process_in_message(in_message, &C);
+    //printf("received message: %s\n", in_message);
     printf("%ld bytes from local host (127.0.0.1)\n\t\t\t msg_seq=%d   rtt= %Lf ms.\n", strlen((char*)buff_dec),i+1, rtt_msec);
     i = i + 1;
+
+    if(i == loop_cnt){
+        char ch;
+        printf("Continue(y/n)?: ");
+        
+        //scanf("%s", sel);
+       
+        ch = getchar();
+        while((getchar()) != '\n');
+        if(strcmp(&ch, "y") == 0) {
+            i = 0;
+            //strcpy(&ch, "");
+        }
+        else
+            break;
+    }
 }
 clock_gettime(CLOCK_MONOTONIC, &tfe);
 timeElapsed = ((double)(tfe.tv_nsec - tfs.tv_nsec))/1000000.0;
