@@ -143,7 +143,6 @@ void create_hello_message(char* hello_message, server* S){
                                           S->iv, S->iv_len,
                                           enc_signature, tag); /* Encrypt the signature and certificate */
                                         
-
     char* base64_enc_signature;
     Base64Encode(enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
     strcat(hello_message, "<IV>");
@@ -314,7 +313,7 @@ S.shared_key = EC_KEY_get0_public_key(S.private_key);
 S.hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
 //printf("\t***DONE***\n");
 
-
+/*Create server hello message*/
 //printf("Generating Master Key...");
 //Reconstruct Client's shared key
 S.C_shared_key = EC_POINT_hex2point(S.ec_group, S.C_hex_key, NULL, S.bn_ctx);
@@ -329,15 +328,15 @@ if(hash_key(hashFunc, S.master_key, S_master_len, &S.hashed_master_key, &S.hashe
 // printf("HKDF key len: %ldB - %ldbit\n", S.hashed_key_len, S.hashed_key_len*8);
 // BIO_dump_fp(stdout, (const char*) S.hashed_master_key, S.hashed_key_len);
 
+
+
+
 //printf("Generating Certificate and signing...");
 S.signature_len = S.func_sign_cert(hashFunc, S.RSA_private_key, S.cert, &S.signature);
-//printf("\t***SIGNED***\n");
-
-/*Create server hello message*/
 S.hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
 create_hello_message(out_message, &S);
 write(client_sock , out_message , strlen(out_message));
-
+//printf("\t***SIGNED***\n");
 printf("Hello Message Sent...\n");
 //---------------------------------------------//
 //--------------START TRANSACTION--------------//
