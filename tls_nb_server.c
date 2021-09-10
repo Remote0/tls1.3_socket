@@ -452,39 +452,6 @@ int main (int argc, char *argv[])
                 printf("===============Transaction===============\n");
                 do
                 {
-                    // rc = recv(i, buffer, sizeof(buffer), 0);
-                    // if (rc < 0)
-                    // {
-                    //     if (errno != EWOULDBLOCK)
-                    //     {
-                    //     perror("  recv() failed");
-                    //     close_conn = TRUE;
-                    //     }
-                    //     break;
-                    // }
-                    // if (rc == 0)
-                    // {
-                    //     printf("  Connection closed\n");
-                    //     close_conn = TRUE;
-                    //     break;
-                    // }
-
-                    // len = rc;
-                    // printf("  %d bytes received\n", len);
-
-                    // /**********************************************/
-                    // /* Echo the data back to the client           */
-                    // /**********************************************/
-                    // rc = send(i, buffer, len, 0);
-                    // if (rc < 0)
-                    // {
-                    //     perror("  send() failed");
-                    //     close_conn = TRUE;
-                    //     break;
-                    // }
-
-                    
-                    
 
                     rc = recv(i , in_message , BUFF_SIZE, 0);
                     
@@ -519,8 +486,6 @@ int main (int argc, char *argv[])
                     write(i , out_message , strlen(out_message));
                     memset(in_message, 0, BUFF_SIZE);
                     loop = loop + 1;
-                    
-                    
         
                 } while (TRUE);
                 printf("==========================================\n");
