@@ -1,0 +1,8 @@
+{
+    "files.associations": {
+        "unistd.h": "c",
+        "ecdh.h": "c",
+        "hmac.h": "c",
+        "ult.h": "c"
+    }
+}
