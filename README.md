@@ -1,20 +1,20 @@
 # tls_pseudo
 
-**Source**
+**1. Source**
 - tls_client.c:       client
 - tls_server.c:       blocking server
 - tls_nb_server.c:    non-blocking server
 
-**Ciphersuite**
-1. Cipher:
+**2. Ciphersuite**
+**Cipher:**
 - aes-128-gcm
 - aes-256-gcm
 - chacha20-poly1305
-2. Hash:
+**Hash:**
 - sha256
 - sha384
 
-**Use example**
+**3. Use example**
 - Run server (either blocking or non-blocking):
 ```
 ./tls_server
@@ -28,6 +28,7 @@
 
 
 -----------------------------------------------------------
+# TLS1.3
 Full TLS handshake:
 
  Client                                           Server
