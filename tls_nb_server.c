@@ -258,11 +258,10 @@ int main (int argc, char *argv[])
     printf("*----------------------------------*\n");
     printf("*----------Creating socket---------*\n");
     printf("*----------------------------------*\n");
-    int    i, len, rc, on = 1;
+    int    i, rc, on = 1;
     int    listen_sd, max_sd, new_sd;
     int    desc_ready, end_server = FALSE;
     int    close_conn;
-    char   buffer[80];
     struct sockaddr_in server;
     struct timeval      timeout;
     fd_set              master_set, working_set;
