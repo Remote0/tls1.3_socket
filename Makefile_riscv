@@ -1,0 +1,68 @@
+#OPENSSL_DIR = /home/tuankiet/Documents/openssl-1.1.1g
+OPENSSL_DIR = ./lib/include
+
+
+LIB = -lm
+INCLUDE = -I$(OPENSSL_DIR)
+LFLAGS = 
+DEPS = ./crypto/*.h
+#where is located the riscv openssl library
+CRYPTO ?= ./openssl/libcrypto.a ./openssl/libssl.a
+
+
+CC = riscv64-unknown-linux-gnu-gcc
+CFLAGS = -Wall -g -Wl,-Bstatic
+
+communication: server client
+tls: tls_server tls_client
+
+nblock_server.o: nblock_server.c
+	$(CC) $(CFLAGS) -c -o nblock_server.o nblock_server.c -lm 
+
+server.o: server.c
+	$(CC) $(CFLAGS) -c -o server.o server.c 
+
+client.o: client.c
+	$(CC) $(CFLAGS) -c -o client.o client.c 
+
+nblock_server: nblock_server.o
+	$(CC) -o nblock_server nblock_server.o $(LFLAGS)
+
+server: server.o
+	$(CC) -o server server.o $(LFLAGS) 
+
+client: client.o
+	$(CC) -o client client.o $(LFLAGS)
+
+tls_nb_server: tls_nb_server.o
+	$(CC) -o tls_nb_server tls_nb_server.o $(LFLAGS) $(LIB) $(CRYPTO)
+
+tls_server: tls_server.o
+	$(CC) -o tls_server tls_server.o $(LFLAGS) $(LIB) $(CRYPTO)
+
+tls_client: tls_client.o
+	$(CC) -o tls_client tls_client.o $(LFLAGS) $(LIB) $(CRYPTO)
+
+demo_handshake: demo_handshake.o
+	$(CC) -o demo_handshake demo_handshake.o $(LFLAGS) $(LIB) $(CRYPTO)
+
+%.o: %.c $(DEPS)
+	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
+
+clean_demo:
+	rm -f demo_handshake demo_handshake.o
+clean_socket:
+	rm -f server.o client.o server client
+clean_tls:
+	rm -f tls_server.o tls_client.o tls_server tls_client
+clean:
+	rm -f server.o client.o tls_server.o tls_client.o server client tls_server tls_client demo_handshake demo_handshake.o test test.o nblock_server nblock_server.o tls_nb_server tls_nb_server.o
+
+#run
+#make -f Makefile_riscv tls
+
+#build openssl for riscv64
+#git clone git@github.com:openssl/openssl.git
+#cd openssl
+#./Configure linux64-riscv64 --cross-compile-prefix=riscv64-unknown-linux-gnu- -no-threads -no-engine -no-dso no-shared -no-asm -march=rv64imafdc -mabi=lp64d
+#make 
