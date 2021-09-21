@@ -25,15 +25,21 @@ void print_key(const EC_GROUP* ec_group, const EC_POINT* key){
 void Base64Encode(const unsigned char* buffer, size_t length, char** base64Text) {
   BIO *bio, *b64;
   BUF_MEM *bufferPtr;
-
+  int stat;
   b64 = BIO_new(BIO_f_base64());
   bio = BIO_new(BIO_s_mem());
   bio = BIO_push(b64, bio);
 
   BIO_write(bio, buffer, length);
-  BIO_flush(bio);
+  stat = BIO_flush(bio);
+  if((stat == 0) | (stat == -1)) {
+    handleErrors("BIO_flush error!\n");
+  }
   BIO_get_mem_ptr(bio, &bufferPtr);
-  BIO_set_close(bio, BIO_NOCLOSE);
+  stat = BIO_set_close(bio, BIO_NOCLOSE);
+  if((stat == 0) | (stat == -1)) {
+    handleErrors("BIO_set_close error!\n");
+  }
   BIO_free_all(bio);
 
   *base64Text=(*bufferPtr).data;
