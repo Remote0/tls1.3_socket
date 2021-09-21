@@ -1,0 +1,1 @@
+cmd_/home/tuankiet/Documents/Workspace/tls1.3_socket/testdriver/testdriver_build/testdriver.o := riscv64-unknown-linux-gnu-ld  -melf64lriscv    -r -o /home/tuankiet/Documents/Workspace/tls1.3_socket/testdriver/testdriver_build/testdriver.o /home/tuankiet/Documents/Workspace/tls1.3_socket/testdriver/testdriver_build/main.o

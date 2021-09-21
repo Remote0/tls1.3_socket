@@ -1,10 +1,10 @@
 OVERLAY_DIR=../module
-DRIVER = mychardriver.ko
+DRIVER = testdriver.ko
 
 ifneq ($(KERNELRELEASE),)
-	mychardriver-y := \
+	testdriver-y := \
 		main.o
-	obj-m += mychardriver.o
+	obj-m += testdriver.o
 else
 
 PWD := $(shell pwd)

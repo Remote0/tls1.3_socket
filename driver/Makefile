@@ -1,7 +1,7 @@
-linux_module_wrkdir := $(abspath .)/mychardriver_build
-linux_module_srcdir := $(abspath .)/mychardriver
-linux_module := $(linux_module_wrkdir)/mychardriver.ko
-linux_srcdir := /home/marco/Workspace/keystone/build/linux.build
+linux_module_wrkdir := $(abspath .)/testdriver_build
+linux_module_srcdir := $(abspath .)/testdriver
+linux_module := $(linux_module_wrkdir)/testdriver.ko
+linux_srcdir := /home/tuankiet/Documents/Workspace/keystone/build/linux.build
 buildroot_rootfs_overlay_dir := $(abspath .)/module
 ISA ?= rv64gc
 ABI ?= lp64d
