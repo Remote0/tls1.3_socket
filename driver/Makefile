@@ -17,3 +17,6 @@ $(linux_module):
 		modules
 	mkdir -p $(buildroot_rootfs_overlay_dir)/root
 	cp $(linux_module) $(buildroot_rootfs_overlay_dir)/root
+
+clean:
+	rm -rf module/ testdriver_build/
