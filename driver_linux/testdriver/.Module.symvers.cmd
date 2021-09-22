@@ -1,1 +1,0 @@
-cmd_/home/tuankiet/Documents/Workspace/linux_driver/testdriver/Module.symvers := sed 's/ko$$/o/' /home/tuankiet/Documents/Workspace/linux_driver/testdriver/modules.order | scripts/mod/modpost -m -a   -o /home/tuankiet/Documents/Workspace/linux_driver/testdriver/Module.symvers -e -i Module.symvers   -T -

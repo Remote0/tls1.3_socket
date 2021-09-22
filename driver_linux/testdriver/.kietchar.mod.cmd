@@ -1,1 +1,0 @@
-cmd_/home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.mod := { echo  /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.o;  echo; } > /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.mod
