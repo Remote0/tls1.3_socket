@@ -1,0 +1,1 @@
+cmd_/home/tuankiet/Documents/Workspace/linux_driver/testdriver/modules.order := {   echo /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.ko; :; } | awk '!x[$$0]++' - > /home/tuankiet/Documents/Workspace/linux_driver/testdriver/modules.order

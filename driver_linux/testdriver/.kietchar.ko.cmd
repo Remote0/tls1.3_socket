@@ -1,0 +1,1 @@
+cmd_/home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.ko := ld -r -m elf_x86_64  --build-id=sha1  -T scripts/module.lds -o /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.ko /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.o /home/tuankiet/Documents/Workspace/linux_driver/testdriver/kietchar.mod.o;  true
