@@ -14,7 +14,6 @@ MODULE_AUTHOR("Kiet Dang");         //The author -- visible when you use modinfo
 MODULE_DESCRIPTION("A simple Linux char driver"); // The description -- see modinfo
 MODULE_VERSION("0.1");              // A version number to inform users
 
-static int majorNumber;     //Store device number -- determined automatically
 static char message[256];     
 static short message_len;
 static int numberOpens = 0;
@@ -35,6 +34,7 @@ static ssize_t dev_write(struct file*, const char*, size_t, loff_t*);
 static struct file_operations fops =
 {
     /* data */
+    .owner = THIS_MODULE,
     .open = dev_open,
     .read = dev_read,
     .write = dev_write,
@@ -51,12 +51,15 @@ static struct file_operations fops =
 static int __init kietchar_init(void){
     printk(KERN_INFO "Kiet-char: Initializing KietChar\n");
     //Register a range of char device number
-    //The major number will be chosen dynamically and return (along with the first minor number) in dev_t
-    if(alloc_chrdev_region(&first, 0, 1, "Leonardo") < 0){
+    /**Format: alloc_chrdev_region(dev_t* dev, uint firstminor, uint count, char* name)
+    *dev_t* dev: store the major and minor number (use marcros MAJOR(dev_t), MINOR(dev_t) to get the coresponding number)
+    *char* name: is the name of the device that should be associated with this number range (will appear in /proc/devices)
+    */
+    if(alloc_chrdev_region(&first, 0, 1, "Kiet") < 0){
         printk(KERN_ALERT "KietChar failed to register a major number\n");
         return -1;
     }
-    printk(KERN_INFO "Kiet-char: register a range of char device number correctly\n");
+    printk(KERN_INFO "Kiet-char: asssigned correctly with major number %d and minor number %d\n", MAJOR(first), MINOR(first));
 
     //Register the device class
     kietcharClass = class_create(THIS_MODULE, CLASS_NAME);
