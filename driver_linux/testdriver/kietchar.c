@@ -4,9 +4,10 @@
 #include <linux/kernel.h>
 #include <linux/device.h>
 #include <linux/uaccess.h>
+#include <linux/cdev.h>
 
 #define DEVICE_NAME "kietchar"      //The dev will appear at /dev/kietchar using this value
-#define CLASS_NAME  "kiet"          //The device class -- this is a character device driver
+#define CLASS_NAME  "CLASS_KIET"          //The device class -- this is a character device driver
 
 MODULE_LICENSE("GPL");
 MODULE_AUTHOR("Kiet Dang");         //The author -- visible when you use modinfo
@@ -19,7 +20,8 @@ static short message_len;
 static int numberOpens = 0;
 static struct class* kietcharClass = NULL; // The device-driver class struct pointer
 static struct device* kietcharDevice = NULL; // The device-driver device struct pointer
-
+static dev_t first;
+static struct cdev c_dev; //Global variable for the character device structure
 // The prototype functions for the character driver -- must come before the struct definition
 static int dev_open(struct inode*, struct file*);
 static int dev_release(struct inode*, struct file*);
@@ -48,32 +50,44 @@ static struct file_operations fops =
 
 static int __init kietchar_init(void){
     printk(KERN_INFO "Kiet-char: Initializing KietChar\n");
-    //Dynamically allocate a major number for the device
-    majorNumber = register_chrdev(0, DEVICE_NAME, &fops);
-    if(majorNumber < 0) {
+    //Register a range of char device number
+    //The major number will be chosen dynamically and return (along with the first minor number) in dev_t
+    if(alloc_chrdev_region(&first, 0, 1, "Leonardo") < 0){
         printk(KERN_ALERT "KietChar failed to register a major number\n");
-        return majorNumber;
+        return -1;
     }
-    printk(KERN_INFO "Kiet-char: register correctly with a major number %d\n", majorNumber);
+    printk(KERN_INFO "Kiet-char: register a range of char device number correctly\n");
 
     //Register the device class
     kietcharClass = class_create(THIS_MODULE, CLASS_NAME);
     if(IS_ERR(kietcharClass)) {     //Check for error and clean up if there is
-        unregister_chrdev(majorNumber, DEVICE_NAME);
+        unregister_chrdev_region(first, 1);
         printk(KERN_ALERT "Failed to register device class\n");
         return PTR_ERR(kietcharClass);  // Correct way to return an error on a pointer
     }
     printk(KERN_INFO "Kiet-char: device class register correctly\n");
 
     //Register the device driver
-    kietcharDevice = device_create(kietcharClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
+    kietcharDevice = device_create(kietcharClass, NULL, first, NULL, DEVICE_NAME);
     if(IS_ERR(kietcharDevice)) {         //Clean up if there is an error
+        class_unregister(kietcharClass);
         class_destroy(kietcharClass);    //Repeated code but the alternative is goto statements
-        unregister_chrdev(majorNumber, DEVICE_NAME);
+        unregister_chrdev_region(first, 1);
         printk(KERN_ALERT "Failed to create the device\n");
         return PTR_ERR(kietcharDevice);
     }
     printk(KERN_INFO "Kiet-char: device class created correctly\n");
+
+    cdev_init(&c_dev, &fops);
+    if(cdev_add(&c_dev, first, 1) == -1){
+        device_destroy(kietcharClass, first);
+        class_unregister(kietcharClass);
+        class_destroy(kietcharClass);
+        unregister_chrdev_region(first, 1);
+        printk(KERN_ALERT "Create character device failed\n");
+    }
+    printk(KERN_INFO "Kiet-char: initialize cdev correctly\n");
+
     return 0;
 }
 
@@ -84,10 +98,11 @@ static int __init kietchar_init(void){
 */
 
 static void __exit kietchar_exit(void){
-    device_destroy(kietcharClass, MKDEV(majorNumber, 0));
-    class_unregister(kietcharClass);
+    cdev_del(&c_dev);
+    device_destroy(kietcharClass, first);
+    class_unregister(kietcharClass); //MUST UNREGSITER BEFORE DESTROY
     class_destroy(kietcharClass);
-    unregister_chrdev(majorNumber, DEVICE_NAME);
+    unregister_chrdev_region(first, 1);
     printk(KERN_INFO "Kiet-char: Goodbye from the LKM!\n");
 }
 
