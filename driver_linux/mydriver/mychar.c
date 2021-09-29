@@ -8,6 +8,7 @@
 #include <linux/interrupt.h>
 #include <linux/io.h>
 #include <linux/ioport.h>
+#include <linux/cdev.h>
 
 #include <linux/of_address.h>
 #include <linux/of_device.h>
@@ -24,6 +25,28 @@ MODULE_AUTHOR("Kiet Dang");         //The author -- visible when you use modinfo
 MODULE_DESCRIPTION("A simple Linux char driver"); // The description -- see modinfo
 MODULE_VERSION("0.1");              // A version number to inform users
 
+// Pointer to the IP registers
+volatile unsigned int* aes_gcm_base_addr;
+volatile unsigned int* aes_gcm_ictrl;
+// volatile unsigned int* aes_gcm_oready;
+
+// volatile unsigned int* aes_gcm_iiv_0;
+// volatile unsigned int* aes_gcm_iiv_1;
+// volatile unsigned int* aes_gcm_iiv_2;
+// volatile unsigned int* aes_gcm_iiv_valid;
+
+// volatile unsigned int* aes_gcm_key_0;
+// volatile unsigned int* aes_gcm_key_1;
+// volatile unsigned int* aes_gcm_key_2;
+// volatile unsigned int* aes_gcm_key_3;
+// volatile unsigned int* aes_gcm_key_4;
+// volatile unsigned int* aes_gcm_key_5;
+// volatile unsigned int* aes_gcm_key_6;
+// volatile unsigned int* aes_gcm_key_7;
+// volatile unsigned int* aes_gcm_key_8;
+
+volatile unsigned int* aes_gcm_iresetn;
+
 // struct to hold the physical address of our device
 struct mychar_local {
     int irq;
@@ -31,13 +54,13 @@ struct mychar_local {
     unsigned long mem_end;
     void __iomem *base_addr;
 };
-static int majorNumber;     //Store device number -- determined automatically
 static char ker_buff[256];     
 static short ker_buff_len;
 static int numberOpens = 0;
 static struct class* kietcharClass = NULL; // The device-driver class struct pointer
 static struct device* kietcharDevice = NULL; // The device-driver device struct pointer
-
+static dev_t first;
+static struct cdev c_dev; //Global variable for the character device structure
 // The prototype functions for the character driver -- must come before the struct definition
 static int dev_open(struct inode*, struct file*);
 static int dev_release(struct inode*, struct file*);
@@ -117,44 +140,63 @@ static int mychar_probe( struct platform_device *pdev){
         goto error2;
     }
     // ************************ NORMAL Device driver *************************** //
-    printk(KERN_INFO "My-char: Initializing MyChar\n");
-    //Dynamically allocate a major number for the device
-    majorNumber = register_chrdev(0, DEVICE_NAME, &fops);
-    if(majorNumber < 0) {
-        printk(KERN_ALERT "My-char:  failed to register a major number\n");
-        return majorNumber;
+    printk(KERN_INFO "Kiet-char: Initializing KietChar\n");
+    //Register a range of char device number
+    /**Format: alloc_chrdev_region(dev_t* dev, uint firstminor, uint count, char* name)
+    *dev_t* dev: store the major and minor number (use marcros MAJOR(dev_t), MINOR(dev_t) to get the coresponding number)
+    *char* name: is the name of the device that should be associated with this number range (will appear in /proc/devices)
+    */
+    if(alloc_chrdev_region(&first, 0, 1, "Kiet") < 0){
+        printk(KERN_ALERT "KietChar failed to register a major number\n");
+        return -1;
     }
-    printk(KERN_INFO "My-char: register correctly with a major number %d\n", majorNumber);
+    printk(KERN_INFO "Kiet-char: asssigned correctly with major number %d and minor number %d\n", MAJOR(first), MINOR(first));
 
     //Register the device class
     kietcharClass = class_create(THIS_MODULE, CLASS_NAME);
     if(IS_ERR(kietcharClass)) {     //Check for error and clean up if there is
-        unregister_chrdev(majorNumber, DEVICE_NAME);
+        unregister_chrdev_region(first, 1);
         printk(KERN_ALERT "Failed to register device class\n");
         return PTR_ERR(kietcharClass);  // Correct way to return an error on a pointer
     }
-    printk(KERN_INFO "My-char: device class register correctly\n");
+    printk(KERN_INFO "Kiet-char: device class register correctly\n");
 
     //Register the device driver
-    kietcharDevice = device_create(kietcharClass, NULL, MKDEV(majorNumber, 0), NULL, DEVICE_NAME);
+    kietcharDevice = device_create(kietcharClass, NULL, first, NULL, DEVICE_NAME);
     if(IS_ERR(kietcharDevice)) {         //Clean up if there is an error
+        class_unregister(kietcharClass);
         class_destroy(kietcharClass);    //Repeated code but the alternative is goto statements
-        unregister_chrdev(majorNumber, DEVICE_NAME);
-        printk(KERN_ALERT "My-char: Failed to create the device\n");
+        unregister_chrdev_region(first, 1);
+        printk(KERN_ALERT "Failed to create the device\n");
         return PTR_ERR(kietcharDevice);
     }
-    printk(KERN_INFO "My-char: device class created correctly\n");
+    printk(KERN_INFO "Kiet-char: device class created correctly\n");
 
-    /* Get IO space for the device */
+    cdev_init(&c_dev, &fops);
+    if(cdev_add(&c_dev, first, 1) == -1){
+        device_destroy(kietcharClass, first);
+        class_unregister(kietcharClass);
+        class_destroy(kietcharClass);
+        unregister_chrdev_region(first, 1);
+        printk(KERN_ALERT "Create character device failed\n");
+    }
+    printk(KERN_INFO "Kiet-char: initialize cdev correctly\n");
+    // ************************ NORMAL Device driver *************************** //
+
+    /* Get data of type IORESOURCE_IRQ (interrupt) from the device tree */
     r_irq = platform_get_resource(pdev, IORESOURCE_IRQ, 0);
     if (!r_irq) {
         printk("My-char: no IRQ found\n");
         printk("My-char: mychar at 0x%08x mapped to 0x%08x\n",
             (unsigned int __force) lp->mem_start,
             (unsigned int __force) lp->base_addr);
-
-            /* Do something with pointer to registers */
-
+        /* Configuring pointers to the IP registers */
+        aes_gcm_base_addr = (unsigned int __force) lp->base_addr;
+        aes_gcm_ictrl = (unsigned int __force) lp->base_addr + AES_GCM_ICTRL;
+        aes_gcm_iresetn = (unsigned int __force) lp->base_addr + AES_GCM_IRESETN;
+        printk(KERN_INFO "My-char: base address - 0x%x08x\n", (unsigned int) aes_gcm_base_addr);
+        printk(KERN_INFO "My-char: reg ictrl - 0x%x08x\n", (unsigned int) aes_gcm_ictrl);
+        printk(KERN_INFO "My-char: reg iresetn - 0x%x08x\n", (unsigned int) aes_gcm_iresetn);
         return 0;
     }
     lp->irq = r_irq->start;
@@ -195,6 +237,12 @@ static int mychar_remove(struct platform_device *pdev) {
     release_mem_region(lp->mem_start, lp->mem_end - lp->mem_start + 1);
     kfree(lp);
     dev_set_drvdata(dev, NULL);
+
+    cdev_del(&c_dev);
+    device_destroy(kietcharClass, first);
+    class_unregister(kietcharClass); //MUST UNREGSITER BEFORE DESTROY
+    class_destroy(kietcharClass);
+    unregister_chrdev_region(first, 1);
     return 0;
 }
 
@@ -299,10 +347,14 @@ static int dev_open(struct inode* inodep, struct file* filep){
  */
 static ssize_t dev_read(struct file* filep, char* buffer, size_t len, loff_t* offset){
     int error_count = 0;
+
+    //unsigned int temp;
+    //temp = ioread32(aes_gcm_base_addr + offset);
+    memcpy_fromio(ker_buff, aes_gcm_base_addr + (unsigned int)offset, len);
+
     //Copy from kernel space to user space
     //format copy_to_user ( *to, *from, size) and returns 0 on success
     error_count = copy_to_user(buffer, ker_buff, ker_buff_len);
-
     if(error_count == 0){
         printk(KERN_INFO "My-char: Sent %d characters to the user\n", ker_buff_len);
         return(ker_buff_len=0); // clear the position to the start and return 0;
@@ -327,6 +379,11 @@ static ssize_t dev_write(struct file* filep, const char* buffer, size_t len, lof
         return -EFAULT;
     ker_buff_len = strlen(ker_buff);  //store the length of the stored message
     
+    /* Do something with the input from user space */
+    //iowrite32((uint32_t)ker_buff, (void*)(aes_gcm_base_addr + (unsigned int)offset));
+    memcpy_toio(aes_gcm_base_addr + (unsigned int)offset, ker_buff, ker_buff_len);
+
+
     printk(KERN_INFO "My-char: Received %zu characters from the user\n", len);
     return len;
 }
