@@ -14,6 +14,8 @@
 #include <linux/of_platform.h>
 #include <linux/platform_device.h>
 
+#include "aes_gcm_regs.h"
+
 #define DEVICE_NAME "mychar"      //The dev will appear at /dev/mychar using this value
 #define CLASS_NAME  "crypto"          //The device class -- this is a character device driver
 
