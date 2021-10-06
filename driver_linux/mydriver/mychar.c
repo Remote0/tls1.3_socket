@@ -250,7 +250,7 @@ static int mychar_remove(struct platform_device *pdev) {
 *   and call probe() to init the device
 */
 static struct of_device_id mychar_of_match[]= {
-    { .compatible = "vendor,mychar", },
+    { .compatible = "uec,aes_gcm-0", },
     { /* end of list */ },
 };
 MODULE_DEVICE_TABLE(of, mychar_of_match);
