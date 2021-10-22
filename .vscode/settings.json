@@ -3,6 +3,15 @@
         "unistd.h": "c",
         "ecdh.h": "c",
         "hmac.h": "c",
-        "ult.h": "c"
+        "ult.h": "c",
+        "system_error": "c",
+        "io.h": "c",
+        "init.h": "c",
+        "device.h": "c",
+        "interrupt.h": "c",
+        "platform_device.h": "c",
+        "of_device.h": "c",
+        "of_platform.h": "c",
+        "typeinfo": "cpp"
     }
 }

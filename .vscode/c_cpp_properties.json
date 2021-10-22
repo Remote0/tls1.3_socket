@@ -3,7 +3,10 @@
         {
             "name": "Linux",
             "includePath": [
-                "${workspaceFolder}/**"
+                "${workspaceFolder}/**",
+                "/home/tuankiet/Documents/Workspace/uec-hanken_keystone/linux/include/",
+                "/home/tuankiet/Documents/Workspace/uec-hanken_keystone/linux/arch/riscv/include/"
+                //"/home/tuankiet/Documents/Workspace/tls1.3_socket/driver_riscv/crypto_driver"
             ],
             "defines": [],
             "compilerPath": "/usr/bin/gcc",
