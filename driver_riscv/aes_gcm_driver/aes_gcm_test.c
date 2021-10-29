@@ -62,7 +62,7 @@ int main(){
         perror("Failed to do encryption to module");
         return errno;
     }
-    printf("Encryption result:\n");
+    printf("Decryption result:\n");
     for (i = 0; i < input_len; i=i+1) { //TODO: need to improve
         printf("output - 0x%08x%08x%08x%08x\n", output[i], output[i+1], output[i+2], output[i+3]);
         i = i + 3;
