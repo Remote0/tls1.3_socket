@@ -1,6 +1,7 @@
 
 aes_gcm_module_srcdir := $(abspath .)/aes_gcm_driver
 chacha_poly_module_srcdir := $(abspath .)/chacha_poly_driver
+hmac_sha_module_srcdir := $(abspath .)/hmac_sha_driver
 
 linux_srcdir := /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/linux.build
 uec_root := /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/overlay/root
@@ -18,11 +19,15 @@ aes_gcm_module := $(aes_gcm_module_wrkdir)/aes_gcm_driver.ko
 #------------chacha-poly------------#
 chacha_poly_module_wrkdir := $(abspath .)/chacha_poly_driver.build
 chacha_poly_module := $(chacha_poly_module_wrkdir)/chacha_poly_driver.ko
+#------------aes-gcm------------#
+hmac_sha_module_wrkdir := $(abspath .)/hmac_sha_driver.build
+hmac_sha_module := $(hmac_sha_module_wrkdir)/hmac_sha_driver.ko
 #################################
 
 #-----------Software------------#
 chacha_poly_testsoft := $(chacha_poly_module_wrkdir)/chacha_poly_test
 aes_gcm_testsoft := $(aes_gcm_module_wrkdir)/aes_gcm_test
+hmac_sha_testsoft := $(hmac_sha_module_wrkdir)/hmac_sha_test
 #################################
 
 aes-gcm:
@@ -51,6 +56,18 @@ chacha-poly:
 	cp $(chacha_poly_module) $(buildroot_rootfs_overlay_dir)/root
 	cp $(chacha_poly_module) $(uec_root)
 
+hmac-sha:
+	rm -rf $(hmac_sha_module_wrkdir)
+	mkdir -p $(hmac_sha_module_wrkdir)
+	cp -r $(hmac_sha_module_srcdir)/* $(hmac_sha_module_wrkdir)
+	$(MAKE) -C $(linux_srcdir) O=$(linux_srcdir) \
+		CROSS_COMPILE=riscv64-unknown-linux-gnu- \
+		ARCH=riscv \
+		M=$(hmac_sha_module_wrkdir) \
+		modules
+	mkdir -p $(buildroot_rootfs_overlay_dir)/root
+	cp $(hmac_sha_module) $(buildroot_rootfs_overlay_dir)/root
+	cp $(hmac_sha_module) $(uec_root)
 
 # Software test
 
@@ -63,6 +80,11 @@ test-chacha-poly: $(chacha_poly_module_wrkdir)/chacha_poly_test.o $(chacha_poly_
 	$(CC) -o $(chacha_poly_module_wrkdir)/chacha_poly_test $(chacha_poly_module_wrkdir)/chacha_poly_test.o $(chacha_poly_module_wrkdir)/chacha_poly_func.o
 	cp $(chacha_poly_testsoft) $(buildroot_rootfs_overlay_dir)/root
 	cp $(chacha_poly_module_wrkdir)/chacha_poly_test $(uec_root)
+
+test-hmac-sha: $(c)/hmac_sha_test.o $(hmac_sha_module_wrkdir)/hmac_sha_func.o
+	$(CC) -o $(hmac_sha_module_wrkdir)/hmac_sha_test $(hmac_sha_module_wrkdir)/hmac_sha_test.o $(hmac_sha_module_wrkdir)/hmac_sha_func.o
+	cp $(hmac_sha_testsoft) $(buildroot_rootfs_overlay_dir)/root
+	cp $(hmac_sha_module_wrkdir)/hmac_sha_test $(uec_root)
 
 $(chacha_poly_module_wrkdir)/%.o: $(chacha_poly_module_wrkdir)/%.c
 	$(CC) $(CFLAGS) -c -o $@ $<
@@ -86,7 +108,6 @@ clean/aes-gcm:
 	rm -rf $(buildroot_rootfs_overlay_dir)/root/aes_gcm_driver.ko aes_gcm_driver.build/
 	rm -rf $(uec_root)/aes_gcm_driver.ko
 
-
 clean/test-aes-gcm:
 	rm -rf $(aes_gcm_module_wrkdir)/aes_gcm_test $(aes_gcm_module_wrkdir)/aes_gcm_test.c $(aes_gcm_module_wrkdir)/aes_gcm_test.o 
 	rm -rf $(uec_root)/aes_gcm_test
@@ -94,3 +115,15 @@ clean/test-aes-gcm:
 	cp $(aes_gcm_module_srcdir)/aes_gcm_test.c $(aes_gcm_module_wrkdir)
 	cp $(aes_gcm_module_srcdir)/aes_gcm_func* $(aes_gcm_module_wrkdir)
 	cp $(aes_gcm_module_srcdir)/aes_gcm_regs.h $(aes_gcm_module_wrkdir)
+
+clean/hmac-sha:
+	rm -rf $(buildroot_rootfs_overlay_dir)/root/hmac_sha_driver.ko hmac_sha_driver.build/
+	rm -rf $(uec_root)/hmac_sha_driver.ko
+
+clean/test-hmac-sha:
+	rm -rf $(hmac_sha_module_wrkdir)/hmac_sha_test $(hmac_sha_module_wrkdir)/hmac_sha_test.c $(hmac_sha_module_wrkdir)/hmac_sha_test.o 
+	rm -rf $(uec_root)/hmac_sha_test
+	rm -rf $(buildroot_rootfs_overlay_dir)/root/hmac_sha_test 
+	cp $(hmac_sha_module_srcdir)/hmac_sha_test.c $(hmac_sha_module_wrkdir)
+	cp $(hmac_sha_module_srcdir)/hmac_sha_func* $(hmac_sha_module_wrkdir)
+	cp $(hmac_sha_module_srcdir)/hmac_sha_regs.h $(hmac_sha_module_wrkdir)	
