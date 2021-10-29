@@ -1,11 +1,10 @@
-linux_module_srcdir := $(abspath .)/testdriver
-crypto_module_srcdir := $(abspath .)/crypto_driver
+
+aes_gcm_module_srcdir := $(abspath .)/aes_gcm_driver
+chacha_poly_module_srcdir := $(abspath .)/chacha_poly_driver
 
 linux_srcdir := /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/linux.build
 uec_root := /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/overlay/root
 
-linux_module_wrkdir := $(abspath .)/testdriver_build
-linux_module := $(linux_module_wrkdir)/testdriver.ko
 
 buildroot_rootfs_overlay_dir := $(abspath .)/module
 ISA ?= rv64gc
@@ -16,17 +15,20 @@ CFLAGS := -Wall -g -Wl,-Bstatic
 #------------aes-gcm------------#
 aes_gcm_module_wrkdir := $(abspath .)/aes_gcm_driver.build
 aes_gcm_module := $(aes_gcm_module_wrkdir)/aes_gcm_driver.ko
+#------------chacha-poly------------#
+chacha_poly_module_wrkdir := $(abspath .)/chacha_poly_driver.build
+chacha_poly_module := $(chacha_poly_module_wrkdir)/chacha_poly_driver.ko
 #################################
 
 #-----------Software------------#
-linux_testsoft := $(linux_module_wrkdir)/testsoft
-aes_gcm_testsoft := $(linux_module_wrkdir)/aes_gcm_test
+chacha_poly_testsoft := $(chacha_poly_module_wrkdir)/chacha_poly_test
+aes_gcm_testsoft := $(aes_gcm_module_wrkdir)/aes_gcm_test
 #################################
 
 aes-gcm:
 	rm -rf $(aes_gcm_module_wrkdir)
 	mkdir -p $(aes_gcm_module_wrkdir)
-	cp -r $(crypto_module_srcdir)/* $(aes_gcm_module_wrkdir)
+	cp -r $(aes_gcm_module_srcdir)/* $(aes_gcm_module_wrkdir)
 	$(MAKE) -C $(linux_srcdir) O=$(linux_srcdir) \
 		CROSS_COMPILE=riscv64-unknown-linux-gnu- \
 		ARCH=riscv \
@@ -34,43 +36,61 @@ aes-gcm:
 		modules
 	mkdir -p $(buildroot_rootfs_overlay_dir)/root
 	cp $(aes_gcm_module) $(buildroot_rootfs_overlay_dir)/root
-	cp $(aes_gcm_module) /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/overlay/root
+	cp $(aes_gcm_module) $(uec_root)
 
-# $(linux_module):
-# 	rm -rf $(linux_module_wrkdir)
-# 	mkdir -p $(linux_module_wrkdir)
-# 	cp -r $(linux_module_srcdir)/* $(linux_module_wrkdir)
-# 	$(MAKE) -C $(linux_srcdir) O=$(linux_srcdir) \
-# 		CROSS_COMPILE=riscv64-unknown-linux-gnu- \
-# 		ARCH=riscv \
-# 		M=$(linux_module_wrkdir) \
-# 		modules
-# 	mkdir -p $(buildroot_rootfs_overlay_dir)/root
-# 	cp $(linux_module) $(buildroot_rootfs_overlay_dir)/root
-# 	cp $(linux_module) /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/overlay/root
-
-# $(linux_module_wrkdir)/%.o: %.c
-# 	$(CC) $(CFLAGS) -c -o $@ $<
+chacha-poly:
+	rm -rf $(chacha_poly_module_wrkdir)
+	mkdir -p $(chacha_poly_module_wrkdir)
+	cp -r $(chacha_poly_module_srcdir)/* $(chacha_poly_module_wrkdir)
+	$(MAKE) -C $(linux_srcdir) O=$(linux_srcdir) \
+		CROSS_COMPILE=riscv64-unknown-linux-gnu- \
+		ARCH=riscv \
+		M=$(chacha_poly_module_wrkdir) \
+		modules
+	mkdir -p $(buildroot_rootfs_overlay_dir)/root
+	cp $(chacha_poly_module) $(buildroot_rootfs_overlay_dir)/root
+	cp $(chacha_poly_module) $(uec_root)
 
 
 # Software test
 
-testsoft: $(linux_module_wrkdir)/testsoft.o
-	$(CC) -o $(linux_module_wrkdir)/testsoft $(linux_module_wrkdir)/testsoft.o
-	cp $(linux_testsoft) $(buildroot_rootfs_overlay_dir)/root
-
-aes_gcm_test: $(linux_module_wrkdir)/aes_gcm_test.o
-	$(CC) -o $(linux_module_wrkdir)/aes_gcm_test $(linux_module_wrkdir)/aes_gcm_test.o
+test-aes-gcm: $(aes_gcm_module_wrkdir)/aes_gcm_test.o $(aes_gcm_module_wrkdir)/aes_gcm_func.o
+	$(CC) -o $(aes_gcm_module_wrkdir)/aes_gcm_test $(aes_gcm_module_wrkdir)/aes_gcm_test.o $(aes_gcm_module_wrkdir)/aes_gcm_func.o
 	cp $(aes_gcm_testsoft) $(buildroot_rootfs_overlay_dir)/root
-	cp $(linux_module_wrkdir)/aes_gcm_test /home/tuankiet/Documents/Workspace/uec-hanken_keystone/build/overlay/root
+	cp $(aes_gcm_module_wrkdir)/aes_gcm_test $(uec_root)
+
+test-chacha-poly: $(chacha_poly_module_wrkdir)/chacha_poly_test.o $(chacha_poly_module_wrkdir)/chacha_poly_func.o
+	$(CC) -o $(chacha_poly_module_wrkdir)/chacha_poly_test $(chacha_poly_module_wrkdir)/chacha_poly_test.o $(chacha_poly_module_wrkdir)/chacha_poly_func.o
+	cp $(chacha_poly_testsoft) $(buildroot_rootfs_overlay_dir)/root
+	cp $(chacha_poly_module_wrkdir)/chacha_poly_test $(uec_root)
+
+$(chacha_poly_module_wrkdir)/%.o: $(chacha_poly_module_wrkdir)/%.c
+	$(CC) $(CFLAGS) -c -o $@ $<
 
 
-# Clean
 
-clean/testdriver:
-	rm -rf module/ testdriver_build/
-	rm -rf $(uec_root)/testdriver.ko
+
+clean/chacha-poly:
+	rm -rf $(buildroot_rootfs_overlay_dir)/root/chacha_poly_driver.ko chacha_poly_driver.build/
+	rm -rf $(uec_root)/chacha_poly_driver.ko
+
+clean/test-chacha-poly:
+	rm -rf $(chacha_poly_module_wrkdir)/chacha_poly_test $(chacha_poly_module_wrkdir)/chacha_poly_test.c $(chacha_poly_module_wrkdir)/chacha_poly_test.o 
+	rm -rf $(uec_root)/chacha_poly_test
+	rm -rf $(buildroot_rootfs_overlay_dir)/root/chacha_poly_test 
+	cp $(chacha_poly_module_srcdir)/chacha_poly_test.c $(chacha_poly_module_wrkdir)
+	cp $(chacha_poly_module_srcdir)/chacha_poly_func* $(chacha_poly_module_wrkdir)
+	cp $(chacha_poly_module_srcdir)/chacha_poly_regs.h $(chacha_poly_module_wrkdir)
 
 clean/aes-gcm:
 	rm -rf $(buildroot_rootfs_overlay_dir)/root/aes_gcm_driver.ko aes_gcm_driver.build/
 	rm -rf $(uec_root)/aes_gcm_driver.ko
+
+
+clean/test-aes-gcm:
+	rm -rf $(aes_gcm_module_wrkdir)/aes_gcm_test $(aes_gcm_module_wrkdir)/aes_gcm_test.c $(aes_gcm_module_wrkdir)/aes_gcm_test.o 
+	rm -rf $(uec_root)/aes_gcm_test
+	rm -rf $(buildroot_rootfs_overlay_dir)/root/aes_gcm_test 
+	cp $(aes_gcm_module_srcdir)/aes_gcm_test.c $(aes_gcm_module_wrkdir)
+	cp $(aes_gcm_module_srcdir)/aes_gcm_func* $(aes_gcm_module_wrkdir)
+	cp $(aes_gcm_module_srcdir)/aes_gcm_regs.h $(aes_gcm_module_wrkdir)
