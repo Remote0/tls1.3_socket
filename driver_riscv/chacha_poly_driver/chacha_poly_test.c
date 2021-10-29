@@ -44,7 +44,7 @@ uint32_t input2[32] = {0xd31a8d34, 0x648e60db, 0x7b86afbc, 0x53ef7ec2,
 int main(){
     int ret, fd;
     //char stringToSend[BUFFER_LENGTH];
-    printf("Starting aes-gcm test code example...\n");
+    printf("Starting chacha-poly test code example...\n");
     fd = open("/dev/chacha-poly", O_RDWR); //Open the device with read/write access
     if(fd < 0){
         printf("Error(%d): ", fd);

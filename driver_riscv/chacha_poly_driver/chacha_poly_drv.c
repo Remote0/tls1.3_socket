@@ -253,10 +253,12 @@ void hwCP_results_mac(struct chacha_poly_data* cp){
 }
 
 int hwchacha_poly_start(struct chacha_poly_data* cp, uint32_t mode, uint32_t* output, uint32_t* mac, uint32_t* input, uint32_t input_len, uint32_t* key, uint32_t* nonce, uint32_t* aad){
+    uint32_t out_mac[4];
     int i = 0;
     uint32_t process_len = input_len;
     uint32_t* pos = input;
     
+
     if(mode == 1)
         {printk(KERN_INFO "chacha-poly: Start chacha-poly in encryption mode\n");}
     else
@@ -264,14 +266,10 @@ int hwchacha_poly_start(struct chacha_poly_data* cp, uint32_t mode, uint32_t* ou
 
     //Poly Key Auto-Gen
     hwchacha_polyinit(cp, key, nonce, mode);
-    #ifdef DEBUG
-    printk(KERN_INFO "chacha-poly: Init Done\n");
-    #endif //DEBUG
+    printk(KERN_INFO "chacha-poly: Initalize chacha-poly\n");
     //AAD
     hwchacha_polyAAD(cp, aad, 12);    
-    #ifdef DEBUG
-    printk(KERN_INFO "chacha-poly: AAD Done\n");
-    #endif //DEBUG
+    printk(KERN_INFO "chacha-poly: AAD Done - compute input...\n");
     //Finish AAD
 
     //process input block - 64bytes = 16uint32_t at a time
@@ -305,11 +303,12 @@ int hwchacha_poly_start(struct chacha_poly_data* cp, uint32_t mode, uint32_t* ou
     printk(KERN_INFO "chacha-poly: Last Block Done\n");
     #endif //DEBUG
    
+    printk(KERN_INFO "chacha-poly: Output done - compute mac...\n");
+
     //Finish 
     hw_CP_finish_AAD(cp);
-    #ifdef DEBUG
-    printk(KERN_INFO "chacha-poly: MAC Done\n");
-    #endif //DEBUG
+    printk(KERN_INFO "chacha-poly: mac done\n");
+
 
     if(mode == 1){
         hwCP_read_mac(cp, mac); //read mac
@@ -317,13 +316,10 @@ int hwchacha_poly_start(struct chacha_poly_data* cp, uint32_t mode, uint32_t* ou
         printk(KERN_INFO "chacha-poly: mac - 0x%08x%08x%08x%08x\n", mac[0],mac[1],mac[2],mac[3]);
         #endif //DEBUG
     }else{
-        uint32_t out_mac[4];
         hwCP_read_mac(cp, out_mac); //read mac
-        #ifdef DEBUG
-        printk(KERN_INFO "chacha-poly: omac - 0x%08x%08x%08x%08x\n", out_mac[0],out_mac[1],out_mac[2],out_mac[3]);
-        #endif //DEBUG
         for(i=0;i<4;i=i+1){
             if(out_mac[i] != mac[i]) {
+                printk(KERN_INFO "chacha-poly: omac - 0x%08x%08x%08x%08x\n", out_mac[0],out_mac[1],out_mac[2],out_mac[3]);
                 printk(KERN_INFO "chacha-poly: Authentication failed\n");
                 return -1;
             }
@@ -360,7 +356,7 @@ void hwchacha_poly_selftest(struct chacha_poly_data* cp){
 
     uint32_t result[16];
     uint32_t result2[16];
-
+    uint32_t omac[4];
     //Poly Key Auto-Gen
     hwchacha_polyinit(cp, key_test, nonce_test, 1);
 
@@ -392,7 +388,7 @@ void hwchacha_poly_selftest(struct chacha_poly_data* cp){
     hw_CP_finish_AAD(cp);
 
     //Print Mac
-    uint32_t omac[4];
+    
     hwCP_read_mac(cp,omac);
     printk(KERN_INFO "chacha-poly: mac - 0x%08x%08x%08x%08x\n", omac[0],omac[1],omac[2],omac[3]);
     printk(KERN_INFO "chacha-poly: RESET MODULE\n"); 
@@ -679,8 +675,6 @@ static ssize_t dev_read(struct file* filep, char* buffer, size_t len, loff_t* of
             error_count = copy_to_user(buffer, &status, 4);
             printk(KERN_INFO "chacha-poly: [10] read ready\n");
             break;
-        default:
-            printk(KERN_INFO "chacha-poly: [error] Cannot decide what to do - Select again");
     }
 
     if(error_count == 0){
@@ -728,8 +722,6 @@ static ssize_t dev_write(struct file* filep, const char* buffer, size_t len, lof
             case 6:
                 authentic = hwchacha_poly_start(lp, 0,output, mac,input, input_len, key,nonce, aad);
                 break;
-            default:
-                printk(KERN_INFO "chacha-poly: [error] Cannot decide what to do - Select again");
         }
     }
     else {
