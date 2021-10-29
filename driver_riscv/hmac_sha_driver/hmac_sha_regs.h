@@ -1,0 +1,45 @@
+#ifndef _HMAC_SHA_DEV_H
+#define _HMAC_SHA_DEV_H
+
+/* Register offsets */
+#define HMAC_SHA_REG_CONF_DATA_0  0X100
+#define HMAC_SHA_REG_CONF_DATA_1  0X104
+#define HMAC_SHA_REG_CONF_ADDRESS 0X108
+#define HMAC_SHA_REG_DOUT_0       0X110
+#define HMAC_SHA_REG_DOUT_1       0X114
+#define HMAC_SHA_REG_CONF_WE      0X118
+#define HMAC_SHA_REG_INPUT_READY  0X120
+#define HMAC_SHA_REG_END_PACKET   0X124
+#define HMAC_SHA_REG_RESETN       0X130
+#define HMAC_SHA_REG_READY        0X134
+#define HMAC_SHA_REG_ENABLE       0X138
+
+#define ADDR_KEY0 96
+#define ADDR_KEY1 97
+#define ADDR_KEY2 98
+#define ADDR_KEY3 99
+#define ADDR_KEY4 100
+#define ADDR_KEY5 101
+#define ADDR_KEY6 102
+#define ADDR_KEY7 103
+#define ADDR_MSGLENH 105
+#define ADDR_MSGLENL 104
+#define ADDR_STATUS  106
+#define ADDR_DIGEST0 88
+#define ADDR_DIGEST1 89
+#define ADDR_DIGEST2 90
+#define ADDR_DIGEST3 91
+#define ADDR_DIGEST4 92
+#define ADDR_DIGEST5 93
+#define ADDR_DIGEST6 94
+#define ADDR_DIGEST7 95
+
+#define SHA 1
+#define HMAC 2
+#define SHA512 4
+#define SHA384 2
+#define SHA256 1
+
+
+
+#endif /* _HMAC_SHA_DEV_H */
