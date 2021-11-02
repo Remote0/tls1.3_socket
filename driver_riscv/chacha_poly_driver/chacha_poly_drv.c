@@ -177,22 +177,6 @@ void hwchacha_polyText(struct chacha_poly_data* cp, uint32_t plain_text[16], int
 }
 
 void hwCP_read_results(struct chacha_poly_data* cp, uint32_t* result){
-    // *output = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_0);
-    // *(output+1) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_1);
-    // *(output+2) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_2);
-    // *(output+3) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_3);
-    // *(output+4) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_4);
-    // *(output+5) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_5);
-    // *(output+6) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_6);
-    // *(output+7) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_7);
-    // *(output+8) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_8);
-    // *(output+9) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_9);
-    // *(output+10) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_10);
-    // *(output+11) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_11);
-    // *(output+12) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_12);
-    // *(output+13) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_13);
-    // *(output+14) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_14);
-    // *(output+15) = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_15);
     result[0] = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_0);
     result[1] = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_1);
     result[2] = ioread32(cp->base_addr + CHACHAPOLY_REG_OUT_2);
@@ -669,7 +653,7 @@ static ssize_t dev_read(struct file* filep, char* buffer, size_t len, loff_t* of
             authentic = 0;
             printk(KERN_INFO "chacha-poly: [9] read authenic\n");
             break;
-        case 10:
+        case 10: //read ready
             send_byte = 4;
             status = hwCP_read_ready(lp);
             error_count = copy_to_user(buffer, &status, 4);
