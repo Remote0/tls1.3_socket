@@ -81,7 +81,7 @@ test-chacha-poly: $(chacha_poly_module_wrkdir)/chacha_poly_test.o $(chacha_poly_
 	cp $(chacha_poly_testsoft) $(buildroot_rootfs_overlay_dir)/root
 	cp $(chacha_poly_module_wrkdir)/chacha_poly_test $(uec_root)
 
-test-hmac-sha: $(c)/hmac_sha_test.o $(hmac_sha_module_wrkdir)/hmac_sha_func.o
+test-hmac-sha: $(hmac_sha_module_wrkdir)/hmac_sha_test.o $(hmac_sha_module_wrkdir)/hmac_sha_func.o
 	$(CC) -o $(hmac_sha_module_wrkdir)/hmac_sha_test $(hmac_sha_module_wrkdir)/hmac_sha_test.o $(hmac_sha_module_wrkdir)/hmac_sha_func.o
 	cp $(hmac_sha_testsoft) $(buildroot_rootfs_overlay_dir)/root
 	cp $(hmac_sha_module_wrkdir)/hmac_sha_test $(uec_root)
