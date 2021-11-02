@@ -1,5 +1,5 @@
-#ifndef __CHACHA_POLY_FUNC_H__
-#define __CHACHA_POLY_FUNC_H__
+#ifndef __HMAC_SHA_FUNC_H__
+#define __HMAC_SHA_FUNC_H__
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -9,17 +9,14 @@
 #include <unistd.h>
 #include <stdint.h>
 
+#include "hmac_sha_regs.h"
 //#define DEBUG
 
-int chacha_poly_set_key(int fd, uint32_t* key);
-int chacha_poly_set_nonce(int fd, uint32_t* nonce);
-int chacha_poly_set_input(int fd, uint32_t* input, uint32_t input_len);
-int chacha_poly_set_aad(int fd, uint32_t* aad);
-int chacha_poly_set_mac(int fd, uint32_t* mac) ;
-int chacha_poly_start_encrypt(int fd);
-int chacha_poly_start_decrypt(int fd);
+int hmac_sha_set_key(int fd, uint64_t* key);
+int hmac_sha_set_input(int fd, uint64_t* input, uint32_t input_len) ;
+int hmac_sha_set_mode(int fd, uint32_t mode, uint32_t submode);
+int hmac_sha_start(int fd);
 
-int chacha_poly_encrypt(int fd, uint32_t* output, uint32_t* mac, uint32_t* input, uint32_t input_len, uint32_t* key, uint32_t* nonce, uint32_t* aad);
-int chacha_poly_decrypt(int fd, uint32_t* output, uint32_t* input, uint32_t input_len, uint32_t* key, uint32_t* iv, uint32_t* aad, uint32_t* mac);
+int hmac_sha_hashing(int fd, uint32_t* mac, uint64_t* input, uint32_t input_len, uint64_t* key, uint32_t mode, uint32_t submode);
 
-#endif //__CHACHA_POLY_FUNC_H__
+#endif //__HMAC_SHA_FUNC_H__

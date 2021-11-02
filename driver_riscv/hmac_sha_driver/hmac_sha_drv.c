@@ -53,18 +53,21 @@ static ssize_t dev_read(struct file*, char*, size_t, loff_t*);
 static ssize_t dev_write(struct file*, const char*, size_t, loff_t*);
 
 //buffer
-static uint32_t ker_buff[50];   
+static uint64_t ker_buff[30];   
 static short ker_buff_len;
 static uint32_t sel_buffer = 0;
 
-// static uint32_t key[8];
-// static uint32_t nonce[3];
-// static uint32_t aad[4];
-// static uint32_t* input;
-// static uint32_t input_len;
-// static uint32_t* output;
-// static uint32_t mac[4];
-// static int authentic = 0;
+static uint64_t key[8]; //512-bit before padding
+static uint64_t* input;
+static uint64_t msg[16];
+static uint32_t input_len;
+uint64_t msj_len[2] = {0, 176}; //fix value
+
+static int mode = 0; //sha-1, hmac-2
+static int sha_mode = 0;
+
+static uint32_t* mac;
+static uint32_t mac_len = 0;
 
 //Function to control hmac-sha module
 /*3’b100: 512-bits mode
@@ -125,7 +128,7 @@ void hmacsha_set_key(struct hmac_sha_data* hs, uint64_t *key)
     }
 }
 
-void hmacsha_set_lenght(struct hmac_sha_data* hs, uint64_t *msj_len)
+void hmacsha_set_len(struct hmac_sha_data* hs, uint64_t *msj_len)
 {
     
     hmacsha_write_conf(hs, ADDR_MSGLENH, msj_len[0]);
@@ -138,21 +141,21 @@ void hmacsha_write_status(struct hmac_sha_data* hs, int mode, int submode)
     hmacsha_write_conf(hs, ADDR_STATUS, config);
 }
 
-int hmacsha_read_ready(struct hmac_sha_data* hs)
+uint32_t hmacsha_read_ready(struct hmac_sha_data* hs)
 {
     if(ioread32(hs->base_addr+HMAC_SHA_REG_READY) == 1){
-        return 0;
+        return 1;
     }else{
-        return -1;
+        return 0;
     }
 }
 
-int hmacsha_read_input_ready(struct hmac_sha_data* hs)
+uint32_t hmacsha_read_input_ready(struct hmac_sha_data* hs)
 {
     if(ioread32(hs->base_addr+HMAC_SHA_REG_INPUT_READY) == 1){
-        return 0;
+        return 1;
     }else{
-        return -1;
+        return 0;
     }
 }
 
@@ -169,19 +172,61 @@ void hmacsha_msj(struct hmac_sha_data* hs, uint64_t *msg)
     }
 }
 
-void hmacsha_read_mac(struct hmac_sha_data* hs, uint64_t *mac)
-{   
-    uint64_t tmp;
-    uint64_t tmp2;
+void hmacsha_read_mac(struct hmac_sha_data* hs, int mode, uint32_t *mac)
+{
     int i;
-    //uint32_t config = hmacsha_read_ready(hs);
-    iowrite32(0, hs->base_addr + HMAC_SHA_REG_CONF_WE);
-    for (i = 0; i < 8; i++)
+    if(mode == SHA256) {
+        iowrite32(0, hs->base_addr + HMAC_SHA_REG_CONF_WE);
+        for (i = 0; i < 8; i++)
+        {
+            iowrite32(ADDR_DIGEST0 + i, hs->base_addr + HMAC_SHA_REG_CONF_ADDRESS);
+            mac[7-i] = ioread32(hs->base_addr+HMAC_SHA_REG_DOUT_1);
+        }
+    }else{
+        iowrite32(0, hs->base_addr + HMAC_SHA_REG_CONF_WE);
+        for (i = 0; i < 8; i++)
+        {
+            iowrite32(ADDR_DIGEST0 + i, hs->base_addr + HMAC_SHA_REG_CONF_ADDRESS);
+            mac[15-i*2-1] = ioread32(hs->base_addr+HMAC_SHA_REG_DOUT_0);
+            mac[15-i*2] = ioread32(hs->base_addr+HMAC_SHA_REG_DOUT_1);
+        }
+    }
+}
+
+void hwhmacsha_start(struct hmac_sha_data* hs){
+    int i = 0;
+    int j;
+    hmacsha_reset(hs);
+    printk(KERN_INFO "hmac-sha: reset done\n");
+    hmacsha_set_len(hs, msj_len);
+    printk(KERN_INFO "hmac-sha: set length done\n");
+    hmacsha_write_status(hs, mode, sha_mode);
+    printk(KERN_INFO "hmac-sha: write status done\n");
+    hmacsha_set_key(hs, key);
+    printk(KERN_INFO "hmac-sha: set key done\n");
+    hmacsha_enable(hs);
+    printk(KERN_INFO "hmac-sha: enable \n");
+    while(hmacsha_read_input_ready(hs)== 0){}
+
+    while(i < input_len){
+        for(j = i;(j<i+16)&(j<input_len);j++){
+            msg[j] = input[j];
+        }
+        hmacsha_msj(hs, msg); //do this multiple times
+        i = i + 16;
+    }
+    
+
+    printk(KERN_INFO "hmac-sha: msg done \n");
+    hmacsha_end_packet(hs);
+    printk(KERN_INFO "hmac-sha: end packet \n");
+    while(hmacsha_read_ready(hs)== 0){}
+    printk(KERN_INFO "hmac-sha: wait ready done \n");
+    hmacsha_read_mac(hs, sha_mode, mac);
+    printk(KERN_INFO "hmac-sha: read mac done \n");
+    for (i = 0; i < 16; i=i+2)
     {
-        iowrite32(ADDR_DIGEST0 + i, hs->base_addr + HMAC_SHA_REG_CONF_ADDRESS);
-        tmp = ioread32(hs->base_addr+HMAC_SHA_REG_DOUT_0);
-        tmp2 = ioread32(hs->base_addr+HMAC_SHA_REG_DOUT_1);
-        mac[7-i] = (uint64_t)(tmp2 | (tmp << 32));
+        printk(KERN_INFO "mac result hmac-sha512: (%d)- 0x%08x%08x\n", i, mac[i], mac[i+1]);
     }
 }
 
@@ -190,158 +235,73 @@ void hwhmacsha_selftest(struct hmac_sha_data* hs)
     int i;
     uint64_t msg[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16}; // multiple of msg - process 1024bit each time
     uint64_t key[8] = {1, 2, 3, 4, 5, 6, 7, 8}; //512bit - before padding
-    uint64_t msj_len[2] = {0, 176}; //fix value
-    //uint64_t msg[16] =   {0,0,0,0,0,0,0,0,0, 0, 0, 0, 0, 0, 0, 0};
-    //uint64_t key[8] = {0,0,0,0,0,0,0,0};
-    //int msg_len = 16;
-    uint64_t mac[8]; //output
     
+    uint64_t msg384[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+    uint64_t key384[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+
+    uint64_t msg256[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
+    uint64_t key256[8] = {1, 2, 3, 4, 5, 6, 7, 8};
+
     printk(KERN_INFO "hmac-sha: Test hmac-sha512\n");
-    //
-    //uart_puts((void *)uart_reg, "Reset: \n\n");
     hmacsha_reset(hs);
     printk(KERN_INFO "hmac-sha: reset done\n");
-    //uart_puts((void *)uart_reg, "Set lenght: \n\n");
-    hmacsha_set_lenght(hs, msj_len);
+    hmacsha_set_len(hs, msj_len);
     printk(KERN_INFO "hmac-sha: set length done\n");
-    //uart_puts((void *)uart_reg, "Write status: \n\n");
     hmacsha_write_status(hs, HMAC, SHA512);
     printk(KERN_INFO "hmac-sha: write status done\n");
-    //uart_puts((void *)uart_reg, "Set key: \n\n");
     hmacsha_set_key(hs, key);
     printk(KERN_INFO "hmac-sha: set key done\n");
     hmacsha_enable(hs);
     printk(KERN_INFO "hmac-sha: enable \n");
-    while(hmacsha_read_input_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait input ready: \n\n");
-        //printk(KERN_INFO "hmac-sha: wait ready \n");
-    }
+    while(hmacsha_read_input_ready(hs)== 0){}
     printk(KERN_INFO "hmac-sha: wait input ready done \n");
-    //uart_puts((void *)uart_reg, "Set msg: \n\n");
-    //for (int i = 0; i < msg_len/16; i++)
-    //{
     hmacsha_msj(hs, msg);
     printk(KERN_INFO "hmac-sha: msj done \n");
-    //}
-    //uart_puts((void *)uart_reg, "End packet: \n\n");
     hmacsha_end_packet(hs);
     printk(KERN_INFO "hmac-sha: end packet \n");
-    while(hmacsha_read_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait ready: \n\n");
-        //printk(KERN_INFO "hmac-sha: wait ready \n");
-    }
+    while(hmacsha_read_ready(hs)== 0){}
     printk(KERN_INFO "hmac-sha: wait ready done \n");
-    //uart_puts((void *)uart_reg, "Get mac: \n\n");
-    hmacsha_read_mac(hs, mac);
+    hmacsha_read_mac(hs, SHA512, mac);
     printk(KERN_INFO "hmac-sha: read mac done \n");
-    //Print
-    for (i = 0; i < 8; i=i+2)
+    for (i = 0; i < 16; i=i+2)
     {
-        printk(KERN_INFO "mac result hmac-sha512: (%d)- 0x%llx%llx\n", i, mac[i], mac[i+1]);
+        printk(KERN_INFO "mac result hmac-sha512: (%d)- 0x%08x%08x\n", i, mac[i], mac[i+1]);
     }
-
-    
-    
 
 //---------------------------------------------------------------------//
     printk(KERN_INFO "hmac-sha: Hardware 384\n");
-    uint64_t msg384[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
-    uint64_t key384[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-    //uint64_t msg[16] =   {0,0,0,0,0,0,0,0,0, 0, 0, 0, 0, 0, 0, 0};
-    //uint64_t key[8] = {0,0,0,0,0,0,0,0};
-    //int msg_len = 16;
-    uint64_t mac384[8];
-    uint64_t msj_len384[2] = {0, 176};
-    //
-    //uart_puts((void *)uart_reg, "Reset: \n\n");
     hmacsha_reset(hs);
-    //uart_puts((void *)uart_reg, "Set lenght: \n\n");
-    hmacsha_set_lenght(hs, msj_len384);
-    //uart_puts((void *)uart_reg, "Write status: \n\n");
+    hmacsha_set_len(hs, msj_len);
     hmacsha_write_status(hs, HMAC, SHA384);
-    //uart_puts((void *)uart_reg, "Set key: \n\n");
     hmacsha_set_key(hs, key384);
     hmacsha_enable(hs);
-    while(hmacsha_read_input_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait input ready: \n\n");
-    }
-
-    //uart_puts((void *)uart_reg, "Set msg: \n\n");
-    //for (int i = 0; i < msg_len/16; i++)
-    //{
+    while(hmacsha_read_input_ready(hs)== 0){}
         hmacsha_msj(hs, msg384);
-    //}
-    //uart_puts((void *)uart_reg, "End packet: \n\n");
     hmacsha_end_packet(hs);
-    while(hmacsha_read_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait ready: \n\n");
-    }
-
-    //uart_puts((void *)uart_reg, "Get mac: \n\n");
-    hmacsha_read_mac(hs, mac384);
-
-    //  //Print
-    // for (int i = 0; i < 3; i++)
-    // {
-    //     uart_put_hex64((void *)uart_reg, mac384[(i * 2)]);
-    //     uart_put_hex64((void *)uart_reg, mac384[(i * 2) + 1]);
-    //     uart_puts((void *)uart_reg, "\n");
-    // }
+    while(hmacsha_read_ready(hs)== 0){}
+    hmacsha_read_mac(hs, SHA384, mac);
     //Print
-    for (i = 0; i < 8; i=i+2)
+    for (i = 0; i < 16; i=i+2)
     {
-        printk(KERN_INFO "mac result hmac-sha384: (%d)- 0x%llx%llx\n", i, mac384[i], mac384[i+1]);
+        printk(KERN_INFO "mac result hmac-sha384: (%d)- 0x%08x%08x\n", i, mac[i], mac[i+1]);
     }
 
 //---------------------------------------------------------------------//
 
     printk(KERN_INFO "hmac-sha: Hardware 256\n");
-    //
-    uint64_t msg256[16] = {1,2,3,4,5,6,7,8,9,10,11,12,13,14,15,16};
-    uint64_t key256[8] = {1, 2, 3, 4, 5, 6, 7, 8};
-    //uint64_t msg[16] =   {0,0,0,0,0,0,0,0,0, 0, 0, 0, 0, 0, 0, 0};
-    //uint64_t key[8] = {0,0,0,0,0,0,0,0};
-    //int msg_len = 16;
-    uint64_t mac256[8];
-    uint64_t msj_len256[2] = {0, 176};
-    //
-    //uart_puts((void *)uart_reg, "Reset: \n\n");
     hmacsha_reset(hs);
-    //uart_puts((void *)uart_reg, "Set lenght: \n\n");
-    hmacsha_set_lenght(hs, msj_len256);
-    //uart_puts((void *)uart_reg, "Write status: \n\n");
+    hmacsha_set_len(hs, msj_len);
     hmacsha_write_status(hs, HMAC, SHA256);
-    //uart_puts((void *)uart_reg, "Set key: \n\n");
     hmacsha_set_key(hs, key256);
     hmacsha_enable(hs);
-    while(hmacsha_read_input_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait input ready: \n\n");
-    }
-
-    //uart_puts((void *)uart_reg, "Set msg: \n\n");
-    //for (int i = 0; i < msg_len/16; i++)
-    //{
-        hmacsha_msj(hs, msg256);
-    //}
-    //uart_puts((void *)uart_reg, "End packet: \n\n");
+    while(hmacsha_read_input_ready(hs)== 0){}
+    hmacsha_msj(hs, msg256);
     hmacsha_end_packet(hs);
-    while(hmacsha_read_ready(hs)!= 0){
-        //uart_puts((void *)uart_reg, "Wait ready: \n\n");
-    }
-
-    //uart_puts((void *)uart_reg, "Get mac: \n\n");
-    hmacsha_read_mac(hs, mac256);
-    // //print
-    // for (int i = 0; i < 4; i++)
-    // {
-    //     uart_put_hex((void *)uart_reg, (uint32_t)mac256[(i * 2)]);
-    //     uart_put_hex((void *)uart_reg, (uint32_t)mac256[(i * 2) + 1]);
-    //     if(i%2 != 0)
-    //         uart_puts((void *)uart_reg, "\n");
-    // }
-    for (i = 0; i < 8; i=i+2)
+    while(hmacsha_read_ready(hs)== 0){}
+    hmacsha_read_mac(hs, SHA256, mac);
+    for (i = 0; i < 16; i=i+2)
     {
-        printk(KERN_INFO "mac result hmac-sha256: (%d)- 0x%llx%llx\n", i, mac256[i], mac256[i+1]);
+        printk(KERN_INFO "mac result hmac-sha256: (%d)- 0x%08x%08x\n", i, mac[i], mac[i+1]);
     }
     
 }
@@ -543,52 +503,38 @@ static int dev_release(struct inode* inodep, struct file* filep){
  * @param offset the offset if required
  */
 static ssize_t dev_read(struct file* filep, char* buffer, size_t len, loff_t* offset){
-    struct hmac_sha_data *lp;
+    struct hmac_sha_data *hs;
     uint32_t status = 0;
     int error_count = 0;
     int send_byte;
 
-    lp = filep->private_data;
-    hwhmacsha_selftest(lp);
+    hs = filep->private_data;
+    //hwhmacsha_selftest(lp);
 
-    // switch(sel_buffer){
-    //     case 7: //read output
-    //         send_byte = input_len;
-    //         output[input_len/4] = output[input_len/4] >> ((input_len%4)*8);
-    //         error_count = copy_to_user(buffer, output, send_byte);
-    //         printk(KERN_INFO "hmac-sha: [7] read output\n");
-    //         kfree(output);
-    //         kfree(input);
-    //         hw_CP_reset(lp); //reset after run
-    //         break;
-    //     case 8: //read mac
-    //         send_byte = 4*4;
-    //         error_count = copy_to_user(buffer, mac, send_byte);
-    //         printk(KERN_INFO "hmac-sha: [8] read mac\n");
-    //         break;
-    //     case 9: //read authentic
-    //         send_byte = 4;
-    //         error_count = copy_to_user(buffer, &authentic, 4);
-    //         authentic = 0;
-    //         printk(KERN_INFO "hmac-sha: [9] read authenic\n");
-    //         break;
-    //     case 10:
-    //         send_byte = 4;
-    //         status = hwCP_read_ready(lp);
-    //         error_count = copy_to_user(buffer, &status, 4);
-    //         printk(KERN_INFO "hmac-sha: [10] read ready\n");
-    //         break;
-    // }
+    switch(sel_buffer){
+        case 8: //read mac
+            send_byte = mac_len;
+            error_count = copy_to_user(buffer, mac, mac_len);
+            kfree(mac);
+            printk(KERN_INFO "hmac-sha: [8] read mac\n");
+            break;
+        case 9: //ready ready
+            send_byte = 4;
+            status = hmacsha_read_ready(hs);
+            error_count = copy_to_user(buffer, &status, 4);
+            printk(KERN_INFO "chacha-poly: [9] read ready\n");
+            break;
+    }
 
-    // if(error_count == 0){
-    //     #ifdef DEBUG
-    //     printk(KERN_INFO "hmac-sha: Sent %d bytes to the user\n", error_count);
-    //     #endif //DEBUG
-    //     return(error_count=0); // clear the position to the start and return 0
-    // }else{
-    //     printk(KERN_INFO "hmac-sha: Failed to send %d bytes to the user\n", error_count);
-    //     return -EFAULT; //Failed -- return a bad address message (i.e. -14)
-    // }
+    if(error_count == 0){
+        #ifdef DEBUG
+        printk(KERN_INFO "hmac-sha: Sent %d bytes to the user\n", send_byte);
+        #endif //DEBUG
+        return(error_count=0); // clear the position to the start and return 0
+    }else{
+        printk(KERN_INFO "hmac-sha: Failed to send %d bytes to the user\n", error_count);
+        return -EFAULT; //Failed -- return a bad address message (i.e. -14)
+    }
 
     return 0;
 }
@@ -608,94 +554,86 @@ static ssize_t dev_write(struct file* filep, const char* buffer, size_t len, lof
 
     lp = filep->private_data;
 
-    // //Get data from user to kernel spaces
-    // if(copy_from_user(ker_buff, buffer, len))
-    //     return -EFAULT;
-    // ker_buff_len = len/4; //store number of uint32
+    //Get data from user to kernel spaces
+    if(copy_from_user(ker_buff, buffer, len))
+        return -EFAULT;
+    ker_buff_len = len/8; //store number of uint64
     
-    // if(ker_buff_len < 2) { //select buffer, len <= 2 bytes
-    //     sel_buffer = ker_buff[0];
-    //     #ifdef DEBUG
-    //     printk("hmac-sha: Select op: %d\n", sel_buffer);
-    //     #endif //DEBUG
-    //     switch(sel_buffer){
-    //         case 5:
-    //             hwhmac_sha_start(lp, 1,output, mac,input, input_len, key,nonce, aad);
-    //             break;
-    //         case 6:
-    //             authentic = hwhmac_sha_start(lp, 0,output, mac,input, input_len, key,nonce, aad);
-    //             break;
-    //     }
-    // }
-    // else {
-    //     switch(sel_buffer) {
-    //         case 0:
-    //             for(i=0; i<8; i=i+1)
-    //                 key[i] = ker_buff[i];
-    //             #ifdef DEBUG
-    //             printk(KERN_INFO "hmac-sha: Set key - 0x%08x%08x%08x%08x\n", *(key), *(key+1), *(key+2), *(key+3));
-    //             printk(KERN_INFO "hmac-sha: Set key - 0x%08x%08x%08x%08x\n", *(key+4), *(key+5), *(key+6), *(key+7));
-    //             #endif //DEBUG
-    //             printk(KERN_INFO "hmac-sha: [0] key in driver \n");
-    //             break;
-    //         case 1:
-    //             for(i=0; i<3; i=i+1)
-    //                 nonce[i] = ker_buff[i];
-    //             printk(KERN_INFO "hmac-sha: [1] nonce in driver");
-    //             break;
-    //         case 2:
-    //             if((len%4) == 0){
-    //                 input = (uint32_t*)kmalloc(sizeof(uint32_t) * ker_buff_len, GFP_KERNEL);
-    //                 output = (uint32_t*)kmalloc(sizeof(uint32_t) * ker_buff_len, GFP_KERNEL);
-    //             }else{
-    //                 ker_buff_len = ker_buff_len + 1;
-    //                 input = (uint32_t*)kmalloc(sizeof(uint32_t) * ker_buff_len, GFP_KERNEL);
-    //                 output = (uint32_t*)kmalloc(sizeof(uint32_t) * ker_buff_len, GFP_KERNEL);
-    //             }
-    //             for(i=0; i<ker_buff_len; i=i+1) 
-    //                 {input[i] = 0; output[i] = 0;}
-    //             #ifdef DEBUG
-    //             printk("hmac-sha: Create & reset in/out buffer\n");
-    //             #endif //DEBUG
-    //             for(i=0; i<ker_buff_len; i=i+1) {
-    //                 if(i == (ker_buff_len-1)) {
-    //                     input[i] = ker_buff[i] << ((len%4)*8); //last block process it len%4 != 0
-    //                 }
-    //                 else
-    //                     input[i] = ker_buff[i];
-    //                 ker_buff[i] = 0;
-    //             }
-    //             input_len = len; //number in bytes
-    //             #ifdef DEBUG
-    //             for (i = 0; i < ker_buff_len; i++)
-    //             {
-    //                 printk("hmac-sha: input - 0x%08x%08x%08x%08x\n", input[i], input[i+1], input[i+2], input[i+3]);
-    //                 i = i + 3;
-    //             }
-    //             #endif //DEBUG
-    //             printk(KERN_INFO "hmac-sha: [2] input in driver with length %d(bytes)", input_len);
-    //             break;
-    //         case 3:
-    //             for(i=0; i<4; i=i+1)
-    //                 aad[i] = ker_buff[i];
-    //             #ifdef DEBUG
-    //             printk(KERN_INFO "hmac-sha: Set aad - 0x%08x%08x%08x%08x\n", *(aad), *(aad+1), *(aad+2), *(aad+3));
-    //             #endif //DEBUG
-    //             printk(KERN_INFO "hmac-sha: [3] aad in driver\n");
-    //             break;
-    //         case 4:
-    //             for(i=0; i<4; i=i+1)
-    //                 mac[i] = ker_buff[i];
-    //             #ifdef DEBUG
-    //             printk(KERN_INFO "hmac-sha: Set mac - 0x%08x%08x%08x%08x\n", *(mac), *(mac+1), *(mac+2), *(mac+3));
-    //             #endif //DEBUG
-    //             printk(KERN_INFO "hmac-sha: [4] mac in driver");
-    //             break;
-    //         default:
-    //             printk(KERN_INFO "hmac-sha: [error] Cannot decide what to do - Select again");
-    //     }
-    // }
-    // return len;
+    if(ker_buff_len < 2) { //select buffer, len <= 2 bytes
+        sel_buffer = ker_buff[0];
+        #ifdef DEBUG
+        printk("hmac-sha: Select op: %d\n", sel_buffer);
+        #endif //DEBUG
+        switch(sel_buffer){
+            case 2:
+                mode = SHA;
+                printk(KERN_INFO "hmac-sha: [2] SHA mode \n");
+                break;
+            case 3:
+                mode = HMAC;
+                printk(KERN_INFO "hmac-sha: [3] HMAC mode \n");
+                break;
+            case 4:
+                sha_mode = SHA512;
+                mac = (uint32_t*)kmalloc(sizeof(uint32_t)*16, GFP_KERNEL);
+                mac_len = 64; //bytes
+                printk(KERN_INFO "hmac-sha: [4] selected SHA512 \n");
+                break;
+            case 5:
+                sha_mode = SHA384;
+                mac = (uint32_t*)kmalloc(sizeof(uint32_t)*12, GFP_KERNEL);
+                mac_len = 48; //bytes
+                printk(KERN_INFO "hmac-sha: [5] selected SHA384 \n");
+                break;
+            case 6:
+                sha_mode = SHA256;
+                mac = (uint32_t*)kmalloc(sizeof(uint32_t)*8, GFP_KERNEL);
+                mac_len = 32; //bytes
+                printk(KERN_INFO "hmac-sha: [6] selected SHA256 \n");
+                break;
+            case 7:
+                hwhmacsha_start(lp);
+                printk(KERN_INFO "hmac-sha: [7] hmac-module start \n");
+                break;
+        }
+    }
+    else {
+        switch(sel_buffer) {
+            case 0:
+                for(i=0; i<(len/8); i=i+1)
+                    key[i] = ker_buff[i];
+                #ifdef DEBUG
+                printk(KERN_INFO "hmac-sha: Set key - 0x%llx%llx\n", *(key), *(key+1));
+                printk(KERN_INFO "hmac-sha: Set key - 0x%llx%llx\n", *(key+2), *(key+3));
+                printk(KERN_INFO "hmac-sha: Set key - 0x%llx%llx\n", *(key+4), *(key+5));
+                printk(KERN_INFO "hmac-sha: Set key - 0x%llx%llx\n", *(key+6), *(key+7));
+                #endif //DEBUG
+                printk(KERN_INFO "hmac-sha: [0] key in driver \n");
+                break;
+            case 1:
+                if((len%8) == 0){
+                    input = (uint64_t*)kmalloc(sizeof(uint64_t)*ker_buff_len, GFP_KERNEL);
+                }else{
+                    ker_buff_len = ker_buff_len + 1;
+                    input = (uint64_t*)kmalloc(sizeof(uint64_t)*ker_buff_len, GFP_KERNEL);
+                }
+                for(i=0; i<ker_buff_len; i=i+1) 
+                    {input[i] = 0;}
+                for(i=0; i<ker_buff_len; i=i+1)
+                    input[i] = ker_buff[i];
+                input_len = ker_buff_len; //in bytes
+            
+                #ifdef DEBUG
+                for(i=0; i<ker_buff_len; i=i+2){
+                    printk(KERN_INFO "hmac-sha: Set input - 0x%llx%llx\n", input[i], input[i+1]);
+                }
+                #endif //DEBUG
+                printk(KERN_INFO "hmac-sha: [1] input in driver \n");
+                break;
+            default:
+                printk(KERN_INFO "hmac-sha: [error] Cannot decide what to do - Select again");
+        }
+    }
     return 0;
 }
 
