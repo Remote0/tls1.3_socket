@@ -22,12 +22,26 @@
 #include "crypto/ult.h"
 #include "crypto/hmac.h"
 
+/* DRIVER */
+#include "driver_include/aes_gcm_func.h"
+#include "driver_include/aes_gcm_regs.h"
+#include "driver_include/chacha_poly_func.h"
+#include "driver_include/chacha_poly_regs.h"
+#include "driver_include/hmac_sha_func.h"
+#include "driver_include/hmac_sha_regs.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
+
+
+
 typedef struct{
     char* cipherSuite;
     char* cipherName;
     char* hashName;
     char keyshare[5];
     char* sign_algorithm;
+    char* device;
 
     /*Client share key*/
     char C_hex_key[130];
@@ -81,6 +95,7 @@ void parsing_hello_message(char* message, server* S){
         S->cipherName = "aes-128-gcm";
         S->hashName = "sha256";
         S->hashed_key_len = 16;
+        S->device = "/dev/aes-gcm";
         break;
     }
     case 2: {
@@ -88,6 +103,7 @@ void parsing_hello_message(char* message, server* S){
         S->cipherName = "aes-256-gcm";
         S->hashName = "sha384";
         S->hashed_key_len = 32;
+        S->device = "/dev/aes-gcm";
         break;
     }
     case 3: {
@@ -95,6 +111,7 @@ void parsing_hello_message(char* message, server* S){
         S->cipherName = "chacha20-poly1305";
         S->hashName = "sha256";
         S->hashed_key_len = 32;
+        S->device = "/dev/chacha-poly";
         break;
     }
     }
@@ -119,7 +136,7 @@ void parsing_hello_message(char* message, server* S){
     //strncpy(S->C_hex_key, &message[53], strlen(message) - 53);
     parse_message(message,"<<KEY>>",NULL, S->C_hex_key);
 }
-void create_hello_message(char* hello_message, server* S){
+int create_hello_message(char* hello_message, server* S){
     strcat(hello_message, "<<KEY>>");
     strcat(hello_message, S->hex_key);
     strcat(hello_message, "<<ENCRYPTED>>");
@@ -132,29 +149,86 @@ void create_hello_message(char* hello_message, server* S){
     strcat(plain_signature, "<<CERT>>");
     strcat(plain_signature, S->cert);
 
+    printf("server-plain: %s\n", plain_signature);
+    printf("server-plaintlen: %ld\n", strlen(plain_signature)); 
+
+    //TODO: change cipher - the plaintext length is 480(divisible by 4)
+    int fd;
+    int ret;
+    fd = open(S->device, O_RDWR); //Open the device with read/write access
+    if(fd < 0){
+        printf("Error(%d): ", fd);
+        perror("Failed to open the module...");
+        return errno;
+    }
+    uint32_t enc_signature[120];
+    int enc_signature_len = 480; //bytes - same size with input
+    uint32_t input_len = 120;
+    uint32_t tag[4];
+    uint32_t additional_len = 4; //4*8*4 = 128-bit
+
+    if(strcmp(S->cipherName, "aes-128-gcm")) {
+        uint32_t key_len = 4; // 4 or 8 == 128 or 256 bit
+        //do encryption
+        ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
+        if(ret<0){
+            perror("Failed to do encryption to module");
+            return errno;
+        }
+    }
+
+    if(strcmp(S->cipherName, "aes-256-gcm")) {
+        uint32_t key_len = 8; // 4 or 8 == 128 or 256 bit
+        //do encryption
+        ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
+        if(ret<0){
+            perror("Failed to do encryption to module");
+            return errno;
+        }
+    }
+    
+    if(strcmp(S->cipherName, "chacha20-poly1305")) {
+        //do encryption
+        ret = chacha_poly_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, (uint32_t*)S->iv, (uint32_t*)S->additional);
+        if(ret<0){
+            perror("Failed to do encryption to module");
+            return errno;
+        }
+    }
+
+    #ifndef SSL /*use this for comparing encryption result*/
     //encode cert and signature too base64
-    unsigned char enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
-    int enc_signature_len;
-    unsigned char tag[16];
-    enc_signature_len = S->func_enc_ptr(S->cipherName,
+    unsigned char ssl_enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
+    int ssl_enc_signature_len;
+    unsigned char ssl_tag[16];
+    ssl_enc_signature_len = S->func_enc_ptr(S->cipherName,
                                           (unsigned char*) plain_signature, strlen(plain_signature),
                                           S->additional, strlen((char*)S->additional),
                                           S->hashed_master_key,
                                           S->iv, S->iv_len,
-                                          enc_signature, tag); /* Encrypt the signature and certificate */
-                                        
+                                          ssl_enc_signature, ssl_tag); /* Encrypt the signature and certificate */
+
+    uint32_t* ptr = (uint32_t*)ssl_enc_signature; //parsing ptr
+    for(int i=0; i < 120; i=i+4){
+        printf("ssl-enc: 0x%08x0x%08x0x%08x0x%08x\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
+    }
+    printf("server-enclen: %d\n", enc_signature_len);
+    printf("server-enclen: %d\n", enc_signature_len);
+    #endif //SSL
+
     char* base64_enc_signature;
-    Base64Encode(enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
+    Base64Encode((unsigned char*)enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
     strcat(hello_message, "<IV>");
     strcat(hello_message, (char*) S->iv);
     strcat(hello_message, "<TAG>");
     char* base64_tag;
-    Base64Encode(tag, 16, &base64_tag);
+    Base64Encode((unsigned char*)tag, 16, &base64_tag);
     strcat(hello_message, (char*) base64_tag);
     strcat(hello_message, "<ADDITIONAL>");
     strcat(hello_message, (char*) S->additional);
     strcat(hello_message, "<SIGNATURE>");
     strcat(hello_message, base64_enc_signature);
+    return 0;
 }
 void parsing_message(const char* message, server* S, unsigned char* plain_text){
     char bs64_tag[100];
@@ -235,7 +309,8 @@ S.ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
 S.bn_ctx = BN_CTX_new();
 S.iv = (unsigned char*)"0123456789ab"; /* 96 bits IV*/
 S.iv_len = 12;
-S.additional = (unsigned char*)"KIET-PC";
+//S.additional = (unsigned char*)"KIET-PC"; //TODO: change to 128bit
+S.additional = (unsigned char*)"0123456789abcdef"; 
 S.cert = "This is the server's certification. The Server will sign this then send signature and this cert to the Client";
 S.RSA_private_key = privateKey;
 
