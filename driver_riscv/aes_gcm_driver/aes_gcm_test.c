@@ -14,7 +14,7 @@
 
 
 //for encryption test
-const uint32_t key_len = 8; //number of bytes
+const uint32_t key_len = 8; //number of int
 uint32_t key[8] = {0xE3C08A8F,0x06C6E3AD,0x95A70557,0xB23F7548,0x3CE33021,0xA9C72B70,0x25666204,0xC69C0B72}; //fix with 8 elements = 32*8 = 256 bits
 const uint32_t input_len = 12;
 uint32_t input[12] = {0x08000F10,0x11121314,0x15161718,0x191A1B1C,0x1D1E1F20,0x21222324,0x25262728,0x292A2B2C,0x2D2E2F30,0x31323334,0x35363738,0x393A0002}; //should be large enough to store input data, or can be just a pointer
