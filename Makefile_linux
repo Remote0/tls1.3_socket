@@ -1,27 +1,30 @@
 OPENSSL_DIR = ./lib/include
-
+DRIVER_DIR = ./driver_include
 
 LIB = -lcrypto -lssl -ldl -lpthread -lm
-INCLUDE = -I/$(OPENSSL_DIR) -I./driver_riscv/aes_gcm_driver/ -I./driver_riscv/chacha_poly_driver/ -I./driver_riscv/hmac_sha_driver/
-LFLAGS = -L/$(OPENSSL_DIR)
-DEPS = ./crypto/*.h ./driver_riscv/aes_gcm_driver/*.h ./driver_riscv/chacha_poly_driver/*.h ./driver_riscv/hmac_sha_driver/*.h
+INCLUDE = -I$(OPENSSL_DIR) -I$(DRIVER_DIR)
+LFLAGS = -L$(OPENSSL_DIR)
+DEPS = ./crypto/*.h $(DRIVER_DIR)/*.h
 
 CC = gcc
 CFLAGS = -Wall -g
 
 all: tls_server tls_client tls_nb_server
 
-tls_nb_server: tls_nb_server.o
+tls_nb_server:  $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o tls_nb_server.o
 	$(CC) -o tls_nb_server tls_nb_server.o $(LFLAGS) $(LIB)
 
-tls_server: tls_server.o
-	$(CC) -o tls_server tls_server.o $(LFLAGS) $(LIB)
+tls_server:  $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o tls_server.o
+	$(CC) -o tls_server tls_server.o $(DRIVER_DIR)/*.o $(LFLAGS) $(LIB)
 
-tls_client: tls_client.o
+tls_client: $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o tls_client.o
 	$(CC) -o tls_client tls_client.o $(LFLAGS) $(LIB)
 
 %.o: %.c $(DEPS)
 	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
 
+$(DRIVER_DIR)/%.o: %.c $(DEPS)
+	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
+
 clean:
-	rm -f tls_server.o tls_client.o tls_server tls_client tls_nb_server tls_nb_server.o
+	rm -f tls_server.o tls_client.o tls_server tls_client tls_nb_server tls_nb_server.o $(DRIVER_DIR)/*.o
