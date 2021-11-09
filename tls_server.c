@@ -132,7 +132,11 @@ void create_hello_message(char* hello_message, server* S){
     strcat(plain_signature, "<<CERT>>");
     strcat(plain_signature, S->cert);
 
+    printf("server-plain: %s\n", plain_signature);
+    printf("server-siglen: %ld\n", S->signature_len);
+
     //encode cert and signature too base64
+    //TODO: change cipher
     unsigned char enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
     int enc_signature_len;
     unsigned char tag[16];
@@ -149,7 +153,7 @@ void create_hello_message(char* hello_message, server* S){
     strcat(hello_message, (char*) S->iv);
     strcat(hello_message, "<TAG>");
     char* base64_tag;
-    Base64Encode(tag, 16, &base64_tag);
+    Base64Encode(tag, 16, &base64_tag); //16*8=128 bit
     strcat(hello_message, (char*) base64_tag);
     strcat(hello_message, "<ADDITIONAL>");
     strcat(hello_message, (char*) S->additional);
@@ -235,7 +239,8 @@ S.ec_group = EC_GROUP_new_by_curve_name(NID_X9_62_prime256v1);
 S.bn_ctx = BN_CTX_new();
 S.iv = (unsigned char*)"0123456789ab"; /* 96 bits IV*/
 S.iv_len = 12;
-S.additional = (unsigned char*)"KIET-PC";
+//S.additional = (unsigned char*)"KIET-PC";
+S.additional = (unsigned char*)"0123456789abcdef"; //TODO: change additional to 128-bit
 S.cert = "This is the server's certification. The Server will sign this then send signature and this cert to the Client";
 S.RSA_private_key = privateKey;
 
@@ -355,6 +360,7 @@ while((read_size = recv(client_sock , in_message , BUFF_SIZE, 0)) > 0) {
     char packet_num[3];
     sprintf(packet_num, "%d", i);
     strcat((char*)message, packet_num);
+    //TODO: change cipher
     buff_enc_length = S.func_enc_ptr(S.cipherName,
                                 message, strlen((char*)message),
                                 S.additional, strlen((char*)S.additional),
