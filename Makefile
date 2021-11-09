@@ -3,7 +3,7 @@ OPENSSL_DIR = ./lib/include
 
 
 LIB = -lcrypto -lssl -ldl -lpthread -lm
-INCLUDE = -I/$(OPENSSL_DIR)
+INCLUDE = -I$(OPENSSL_DIR)
 LFLAGS = -L/$(OPENSSL_DIR)
 DEPS = ./crypto/*.h
 
