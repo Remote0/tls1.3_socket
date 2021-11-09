@@ -2,10 +2,9 @@ OPENSSL_DIR = ./lib/include
 
 
 LIB = -lcrypto -lssl -ldl -lpthread -lm
-INCLUDE = -I/$(OPENSSL_DIR)
+INCLUDE = -I/$(OPENSSL_DIR) -I./driver_riscv/aes_gcm_driver/ -I./driver_riscv/chacha_poly_driver/ -I./driver_riscv/hmac_sha_driver/
 LFLAGS = -L/$(OPENSSL_DIR)
-DEPS = ./crypto/*.h
-
+DEPS = ./crypto/*.h ./driver_riscv/aes_gcm_driver/*.h ./driver_riscv/chacha_poly_driver/*.h ./driver_riscv/hmac_sha_driver/*.h
 
 CC = gcc
 CFLAGS = -Wall -g
