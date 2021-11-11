@@ -1,10 +1,12 @@
 #OPENSSL_DIR = /home/tuankiet/Documents/openssl-3.0-riscv
 OPENSSL_DIR = /home/tuankiet/Documents/openssl-1.1.1-riscv
 
+DRIVER_DIR = ./driver_include
+
 LIB = -lm
-INCLUDE = -I$(OPENSSL_DIR)/include
+INCLUDE = -I$(OPENSSL_DIR)/include -I$(DRIVER_DIR)
 LFLAGS = 
-DEPS = ./crypto/*.h
+DEPS = ./crypto/*.h $(DRIVER_DIR)/*.h
 #where is located the riscv openssl library
 CRYPTO = $(OPENSSL_DIR)/libcrypto.a $(OPENSSL_DIR)/libssl.a
 
@@ -12,7 +14,7 @@ CRYPTO = $(OPENSSL_DIR)/libcrypto.a $(OPENSSL_DIR)/libssl.a
 CC = riscv64-unknown-linux-gnu-gcc
 CFLAGS = -Wall -g -Wl,-Bstatic
 
-all: tls_server tls_client tls_nb_server demo_handshake
+all: tls_server tls_client tls_nb_server
 
 demo_handshake: demo_handshake.o
 	$(CC) -o demo_handshake demo_handshake.o $(LFLAGS) $(LIB) $(CRYPTO)
@@ -20,17 +22,20 @@ demo_handshake: demo_handshake.o
 tls_nb_server: tls_nb_server.o
 	$(CC) -o tls_nb_server tls_nb_server.o $(LFLAGS) $(LIB) $(CRYPTO)
 
-tls_server: tls_server.o
-	$(CC) -o tls_server tls_server.o $(LFLAGS) $(LIB) $(CRYPTO)
+tls_server: tls_server.o $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o 
+	$(CC) -o tls_server tls_server.o $(DRIVER_DIR)/*.o $(LFLAGS) $(LIB) $(CRYPTO)
 
-tls_client: tls_client.o
-	$(CC) -o tls_client tls_client.o $(LFLAGS) $(LIB) $(CRYPTO)
+tls_client: tls_client.o $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o 
+	$(CC) -o tls_client tls_client.o $(DRIVER_DIR)/*.o $(LFLAGS) $(LIB) $(CRYPTO)
 
 %.o: %.c $(DEPS)
 	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
 
+$(DRIVER_DIR)/%.o: %.c $(DEPS)
+	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
+
 clean:
-	rm -f tls_server.o tls_client.o tls_server tls_client tls_nb_server tls_nb_server.o demo_handshake demo_handshake.o
+	rm -f tls_server.o tls_client.o tls_server tls_client tls_nb_server tls_nb_server.o demo_handshake demo_handshake.o $(DRIVER_DIR)/*.o
 
 #run
 #make -f Makefile_riscv all
