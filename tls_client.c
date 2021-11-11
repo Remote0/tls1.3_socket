@@ -22,12 +22,25 @@
 #include "crypto/ult.h"
 #include "crypto/hmac.h"
 
+/* DRIVER */
+#include "driver_include/aes_gcm_func.h"
+#include "driver_include/aes_gcm_regs.h"
+#include "driver_include/chacha_poly_func.h"
+#include "driver_include/chacha_poly_regs.h"
+#include "driver_include/hmac_sha_func.h"
+#include "driver_include/hmac_sha_regs.h"
+#include "driver_include/drv_AEAD.h"
+#include <errno.h>
+#include <fcntl.h>
+#include <stdint.h>
+
 typedef struct {
     char* cipherSuite[3];
     char* key_share;
     char* sign_algorithm;
     char* cipherName;
     char* hashName;
+    char* device;
 
     /*Client share key*/
     EC_POINT* S_shared_key;
@@ -129,6 +142,7 @@ int verify(const char* plain_signature, client* C) {
     parse_message(plain_signature,"<<CERT>>",NULL,certification);
     C->RSA_public_key = publicKey;
     printf("Verifying signature...");
+    //TODO: change verification
     int authentic = C->func_verf_cert(C->hashFunc, C->RSA_public_key, certification, signature, signature_len);
     return authentic;
 }
@@ -202,10 +216,18 @@ while((opt = getopt(argc, argv, "c:h:")) != -1) {
     switch(opt) {
         case 'c':
             C.cipherName = optarg;
-            if(!strcmp(C.cipherName, "aes-128-gcm"))
-                    C.hashed_key_len = 16;
-            else if((!strcmp(C.cipherName, "aes-256-gcm")) | (!strcmp(C.cipherName, "chacha20-poly1305")))
-                    C.hashed_key_len = 32;
+            if(!strcmp(C.cipherName, "aes-128-gcm")) {
+                C.hashed_key_len = 16;
+                C.device = "/dev/aes-gcm";
+            }
+            else if(!strcmp(C.cipherName, "aes-256-gcm")) {
+                C.hashed_key_len = 32;
+                C.device = "/dev/aes-gcm";
+            }
+            else if (!strcmp(C.cipherName, "chacha20-poly1305")) {
+                C.hashed_key_len = 32;
+                C.device = "/dev/chacha-poly";
+            }
             break;
         case 'h':
             C.hashName = optarg;
@@ -295,6 +317,9 @@ if( recv(sock , in_message , BUFF_SIZE , 0) < 0)
     printf("recv failed\n");
     return 1;
 }
+// printf("client-revhello: %s\n",in_message);
+// printf("client-revhello_len: %ld\n", strlen(in_message));
+
 parsing_hello_message(in_message, &C);
 
 /* Generating Master Key*/
@@ -303,6 +328,7 @@ size_t C_master_len;
 C_master_len = compute_key(C.private_key, C.S_shared_key, &C.master_key);
 if (C.master_key == NULL)
         handleErrors("Error creating Master Key");
+//TODO change hash
 if(hash_key(C.hashFunc, C.master_key, C_master_len, &C.hashed_master_key, &C.hashed_key_len) < 0) {
     handleErrors("error generate hashed key\n");
 }
@@ -311,15 +337,68 @@ if(hash_key(C.hashFunc, C.master_key, C_master_len, &C.hashed_master_key, &C.has
 // BIO_dump_fp(stdout, (const char*) C.hashed_master_key, C.hashed_key_len);
 
 /* Verify Server Authentication */
-buff_dec_length = C.func_dec_ptr( C.cipherName,
-                                        C.enc_signature, C.enc_signature_len,
-                                        C.additional, strlen((char*)C.additional),
-                                        C.hashed_master_key,
-                                        C.tag,
-                                        C.iv, 12,
-                                        buff_dec);
-buff_dec[buff_dec_length] = '\0';
-if(verify((char*)buff_dec, &C)){
+// buff_dec_length = C.func_dec_ptr( C.cipherName,
+//                                         C.enc_signature, C.enc_signature_len,
+//                                         C.additional, strlen((char*)C.additional),
+//                                         C.hashed_master_key,
+//                                         C.tag,
+//                                         C.iv, 12,
+//                                         buff_dec);
+// buff_dec[buff_dec_length] = '\0';
+
+//TODO change cipher here
+uint32_t dec_signature[120];
+//int dec_signature_len = 480; //bytes - same size with input
+uint32_t input_len = 120;
+uint32_t additional_len = 4; //4*8*4 = 128-bit
+
+int ret;
+// int fd;
+// fd = open(C.device, O_RDWR); //Open the device with read/write access
+//     if(fd < 0){
+//         printf("Error(%d): ", fd);
+//         perror("Failed to open the module...");
+//         return errno;
+//     }
+// if(!strcmp(C.cipherName, "aes-128-gcm")) {
+//     uint32_t key_len = 4; // 4 or 8 == 128 or 256 bit
+//     printf("do decryption using aes 128\n");
+//     //do encryptions
+//     ret = aes_gcm_decrypt(fd, dec_signature,  (uint32_t*)C.enc_signature, input_len, (uint32_t*)C.hashed_master_key, key_len, (uint32_t*) C.iv,  (uint32_t*)C.additional, additional_len,  (uint32_t*) C.tag);
+//     if(ret<0){
+//         perror("Failed to do decryption to module");
+//         return errno;
+//     }
+// }
+// if(!strcmp(C.cipherName, "aes-256-gcm")) {
+//     uint32_t key_len = 8; // 4 or 8 == 128 or 256 bit
+//     printf("do decryption using aes 256\n");
+//     //do encryptions
+//     ret = aes_gcm_decrypt(fd, dec_signature,  (uint32_t*)C.enc_signature, input_len, (uint32_t*)C.hashed_master_key, key_len, (uint32_t*) C.iv,  (uint32_t*)C.additional, additional_len,  (uint32_t*) C.tag);
+//     if(ret<0){
+//         perror("Failed to do decryption to module");
+//         return errno;
+//     }
+// }
+// if(!strcmp(C.cipherName, "chacha20-poly1305")) {
+//     printf("do decryption using chacha\n");
+//     //do encryptions
+//     ret = chacha_poly_decrypt(fd, dec_signature, (uint32_t*)C.enc_signature, dec_signature_len, (uint32_t*)C.hashed_master_key, (uint32_t*) C.iv, (uint32_t*)C.additional,(uint32_t*) C.tag);
+//     if(ret<0){
+//         perror("Failed to do decryption to module");
+//         return errno;
+//     }
+// }
+// close(fd);
+ret = drv_decrypt(C.device, C.cipherName, dec_signature, (uint32_t*)C.enc_signature, input_len, (uint32_t*)C.hashed_master_key,  (uint32_t*) C.iv, (uint32_t*)C.additional, additional_len, (uint32_t*) C.tag);
+
+char* cptr = (char*) dec_signature;
+cptr[input_len*4] = '\0';
+//decrypt signature + cert should be available here, before verification
+printf("client-sevplain: %s\n", cptr);
+printf("client-sevplaintlen: %ld\n", strlen(cptr)); 
+
+if(verify(cptr, &C)){
     printf("\t***AUTHENTIC***\n");
     printf("Connection ACCEPTED\n");
 }else{

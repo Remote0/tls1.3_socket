@@ -29,6 +29,7 @@
 #include "driver_include/chacha_poly_regs.h"
 #include "driver_include/hmac_sha_func.h"
 #include "driver_include/hmac_sha_regs.h"
+#include "driver_include/drv_AEAD.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <stdint.h>
@@ -148,76 +149,82 @@ int create_hello_message(char* hello_message, server* S){
     strcat(plain_signature, base64_signature);
     strcat(plain_signature, "<<CERT>>");
     strcat(plain_signature, S->cert);
-
+    printf("server-siglen: %ld\n", S->signature_len); 
     printf("server-plain: %s\n", plain_signature);
     printf("server-plaintlen: %ld\n", strlen(plain_signature)); 
 
+    
     //TODO: change cipher - the plaintext length is 480(divisible by 4)
-    int fd;
+    // int fd;
     int ret;
-    fd = open(S->device, O_RDWR); //Open the device with read/write access
-    if(fd < 0){
-        printf("Error(%d): ", fd);
-        perror("Failed to open the module...");
-        return errno;
-    }
+    // fd = open(S->device, O_RDWR); //Open the device with read/write access
+    // if(fd < 0){
+    //     printf("Error(%d): ", fd);
+    //     perror("Failed to open the module...");
+    //     return errno;
+    // }
     uint32_t enc_signature[120];
-    int enc_signature_len = 480; //bytes - same size with input
+    //int enc_signature_len = 480; //bytes - same size with input
     uint32_t input_len = 120;
     uint32_t tag[4];
     uint32_t additional_len = 4; //4*8*4 = 128-bit
 
-    if(strcmp(S->cipherName, "aes-128-gcm")) {
-        uint32_t key_len = 4; // 4 or 8 == 128 or 256 bit
-        //do encryption
-        ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
-        if(ret<0){
-            perror("Failed to do encryption to module");
-            return errno;
-        }
-    }
+    // if(!strcmp(S->cipherName, "aes-128-gcm")) {
+    //     uint32_t key_len = 4; // 4 or 8 == 128 or 256 bit
+    //     printf("do encryption using aes 128\n");
+    //     //do encryption
+    //     ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
+    //     if(ret<0){
+    //         perror("Failed to do encryption to module");
+    //         return errno;
+    //     }
+    // }
 
-    if(strcmp(S->cipherName, "aes-256-gcm")) {
-        uint32_t key_len = 8; // 4 or 8 == 128 or 256 bit
-        //do encryption
-        ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
-        if(ret<0){
-            perror("Failed to do encryption to module");
-            return errno;
-        }
-    }
+    // if(!strcmp(S->cipherName, "aes-256-gcm")) {
+    //     uint32_t key_len = 8; // 4 or 8 == 128 or 256 bit
+    //     //do encryption
+    //     printf("do encryption using aes 256\n");
+    //     ret = aes_gcm_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, key_len, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
+    //     if(ret<0){
+    //         perror("Failed to do encryption to module");
+    //         return errno;
+    //     }
+    // }
     
-    if(strcmp(S->cipherName, "chacha20-poly1305")) {
-        //do encryption
-        ret = chacha_poly_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, (uint32_t*)S->iv, (uint32_t*)S->additional);
-        if(ret<0){
-            perror("Failed to do encryption to module");
-            return errno;
-        }
-    }
+    // if(!strcmp(S->cipherName, "chacha20-poly1305")) {
+    //     //do encryption
+    //     printf("do encryption using chacha\n");
+    //     ret = chacha_poly_encrypt(fd, enc_signature, tag, (uint32_t*)plain_signature, enc_signature_len, (uint32_t*)S->hashed_master_key, (uint32_t*)S->iv, (uint32_t*)S->additional);
+    //     if(ret<0){
+    //         perror("Failed to do encryption to module");
+    //         return errno;
+    //     }
+    // }
+    // close(fd);
+    ret = drv_encrypt(S->device, S->cipherName, enc_signature, tag, (uint32_t*)plain_signature, input_len, (uint32_t*)S->hashed_master_key, (uint32_t*)S->iv, (uint32_t*)S->additional, additional_len);
 
-    #ifndef SSL /*use this for comparing encryption result*/
-    //encode cert and signature too base64
-    unsigned char ssl_enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
-    int ssl_enc_signature_len;
-    unsigned char ssl_tag[16];
-    ssl_enc_signature_len = S->func_enc_ptr(S->cipherName,
-                                          (unsigned char*) plain_signature, strlen(plain_signature),
-                                          S->additional, strlen((char*)S->additional),
-                                          S->hashed_master_key,
-                                          S->iv, S->iv_len,
-                                          ssl_enc_signature, ssl_tag); /* Encrypt the signature and certificate */
+    // #ifndef SSL /*use this for comparing encryption result*/
+    // //encode cert and signature too base64
+    // unsigned char ssl_enc_signature[BUFF_SIZE]; /* Buffer encrypted signature and certificate */
+    // int ssl_enc_signature_len;
+    // unsigned char ssl_tag[16];
+    // ssl_enc_signature_len = S->func_enc_ptr(S->cipherName,
+    //                                       (unsigned char*) plain_signature, strlen(plain_signature),
+    //                                       S->additional, strlen((char*)S->additional),
+    //                                       S->hashed_master_key,
+    //                                       S->iv, S->iv_len,
+    //                                       ssl_enc_signature, ssl_tag); /* Encrypt the signature and certificate */
 
-    uint32_t* ptr = (uint32_t*)ssl_enc_signature; //parsing ptr
-    for(int i=0; i < 120; i=i+4){
-        printf("ssl-enc: 0x%08x0x%08x0x%08x0x%08x\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
-    }
-    printf("server-enclen: %d\n", enc_signature_len);
-    printf("server-enclen: %d\n", enc_signature_len);
-    #endif //SSL
+    // uint32_t* ptr = (uint32_t*)ssl_enc_signature; //parsing ptr
+    // for(int i=0; i < 120; i=i+4){
+    //     printf("ssl-enc: 0x%08x0x%08x0x%08x0x%08x\n", ptr[i], ptr[i+1], ptr[i+2], ptr[i+3]);
+    // }
+    // printf("server-enclen: %d\n", enc_signature_len);
+    // printf("server-enclen: %d\n", enc_signature_len);
+    // #endif //SSL
 
     char* base64_enc_signature;
-    Base64Encode((unsigned char*)enc_signature, (size_t)enc_signature_len, &base64_enc_signature);
+    Base64Encode((unsigned char*)enc_signature, (size_t)input_len*4, &base64_enc_signature);
     strcat(hello_message, "<IV>");
     strcat(hello_message, (char*) S->iv);
     strcat(hello_message, "<TAG>");
@@ -410,6 +417,10 @@ if(hash_key(hashFunc, S.master_key, S_master_len, &S.hashed_master_key, &S.hashe
 S.signature_len = S.func_sign_cert(hashFunc, S.RSA_private_key, S.cert, &S.signature);
 S.hex_key = EC_POINT_point2hex(S.ec_group, S.shared_key, POINT_CONVERSION_UNCOMPRESSED, S.bn_ctx);
 create_hello_message(out_message, &S);
+
+// printf("server-hello: %s\n",out_message);
+// printf("server-hello_len: %ld\n", strlen(out_message));
+
 write(client_sock , out_message , strlen(out_message));
 //printf("\t***SIGNED***\n");
 printf("Hello Message Sent...\n");
