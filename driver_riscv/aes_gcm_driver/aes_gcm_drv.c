@@ -53,7 +53,7 @@ static ssize_t dev_read(struct file*, char*, size_t, loff_t*);
 static ssize_t dev_write(struct file*, const char*, size_t, loff_t*);
 
 //buffer
-static uint32_t ker_buff[30];   
+static uint32_t ker_buff[300];   
 static short ker_buff_len;
 static uint32_t sel_buffer = 0;
 
