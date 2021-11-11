@@ -18,7 +18,7 @@ tls_server:  $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRI
 	$(CC) -o tls_server tls_server.o $(DRIVER_DIR)/*.o $(LFLAGS) $(LIB)
 
 tls_client: $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o tls_client.o
-	$(CC) -o tls_client tls_client.o $(LFLAGS) $(LIB)
+	$(CC) -o tls_client tls_client.o $(DRIVER_DIR)/*.o $(LFLAGS) $(LIB)
 
 %.o: %.c $(DEPS)
 	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
@@ -26,5 +26,11 @@ tls_client: $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIV
 $(DRIVER_DIR)/%.o: %.c $(DEPS)
 	$(CC) $(CFLAGS) -c -o $@ $< $(INCLUDE)
 
+test: test.o $(DRIVER_DIR)/aes_gcm_func.o $(DRIVER_DIR)/chacha_poly_func.o $(DRIVER_DIR)/hmac_sha_func.o 
+	$(CC) -o test test.o $(LFLAGS) $(LIB)
+
 clean:
 	rm -f tls_server.o tls_client.o tls_server tls_client tls_nb_server tls_nb_server.o $(DRIVER_DIR)/*.o
+
+clean/test:
+	rm -rf test test.o $(DRIVER_DIR)/*.o
